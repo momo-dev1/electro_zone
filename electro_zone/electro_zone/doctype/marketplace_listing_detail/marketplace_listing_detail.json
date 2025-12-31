@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-12-20 11:36:18.415001",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_kh6a",
+  "platform",
+  "asin",
+  "commission",
+  "shipping_fee",
+  "listing_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_kh6a",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "platform",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Platform",
+   "options": "Amazon\nAmazon FBA\nNoon\nJumia\nB-tech\nHomzmart",
+   "reqd": 1
+  },
+  {
+   "fieldname": "asin",
+   "fieldtype": "Data",
+   "label": "ASIN / SKU",
+   "reqd": 1
+  },
+  {
+   "fieldname": "commission",
+   "fieldtype": "Percent",
+   "label": "Commission",
+   "reqd": 1
+  },
+  {
+   "fieldname": "shipping_fee",
+   "fieldtype": "Currency",
+   "label": "Shipping Fee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "listing_url",
+   "fieldtype": "Data",
+   "label": "Listing URL"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-12-31 12:04:14.280325",
+ "modified_by": "Administrator",
+ "module": "Electro Zone",
+ "name": "Marketplace Listing Detail",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "RPT-.YYYY.-.###",
+ "creation": "2025-11-08 13:13:12.687296",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_vrex",
+  "amended_from",
+  "item_information_section",
+  "item_code",
+  "date",
+  "column_break_4m1h",
+  "item_group",
+  "brand",
+  "column_break_8krb",
+  "final_price_list",
+  "calculation_section",
+  "method",
+  "column_break_hdwg",
+  "final_rate_price",
+  "discount_information_section",
+  "column_break_zxqt",
+  "cash_discount",
+  "invoice_discount",
+  "column_break_ys3u",
+  "quarter_discount",
+  "yearly_discount"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_vrex",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Rebate List",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "item_information_section",
+   "fieldtype": "Section Break",
+   "label": "Item Information"
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_4m1h",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Group",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "brand",
+   "fieldtype": "Data",
+   "label": "Brand",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_8krb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "final_price_list",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Final Price List",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "calculation_section",
+   "fieldtype": "Section Break",
+   "label": "Calculation"
+  },
+  {
+   "fieldname": "method",
+   "fieldtype": "Select",
+   "label": "Method",
+   "options": "Gross\nNet",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_hdwg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "fieldname": "final_rate_price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Final Rate Price",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "discount_information_section",
+   "fieldtype": "Section Break",
+   "label": "Discount Information"
+  },
+  {
+   "fieldname": "column_break_zxqt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cash_discount",
+   "fieldtype": "Percent",
+   "label": "Cash Discount (%)",
+   "precision": "2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "invoice_discount",
+   "fieldtype": "Percent",
+   "label": "Invoice Discount (%)",
+   "precision": "2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ys3u",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quarter_discount",
+   "fieldtype": "Percent",
+   "label": "Quarter Discount (%)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "yearly_discount",
+   "fieldtype": "Percent",
+   "label": "Yearly Discount (%)",
+   "precision": "2"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-12-31 00:15:08.447491",
+ "modified_by": "Administrator",
+ "module": "Electro Zone",
+ "name": "Rebate List",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

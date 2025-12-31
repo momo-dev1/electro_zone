@@ -1,0 +1,461 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2025-11-03 13:28:27.776940",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_kjvb",
+  "naming_series",
+  "item_code",
+  "match_status",
+  "date",
+  "column_break_ocre",
+  "item_group",
+  "comparison_status",
+  "column_break_wkhr",
+  "brand",
+  "amended_from",
+  "effective_date",
+  "comparison_results_section",
+  "match_item_group",
+  "match_brand",
+  "column_break_zdod",
+  "match_price_list",
+  "match_promo",
+  "match_sellout_promo",
+  "match_final_price_list",
+  "column_break_sdou",
+  "match_rrp",
+  "manager_correction_section",
+  "needs_manager_correction",
+  "manager_correction_by",
+  "column_break_ogij",
+  "manager_correction_date",
+  "stock_user_entry_section",
+  "stock_submitted",
+  "stock_submitted_by",
+  "stock_submission_date",
+  "stock_item_group",
+  "stock_brand",
+  "column_break_uyka",
+  "stock_price_list",
+  "stock_promo",
+  "stock_sellout_promo",
+  "stock_final_price_list",
+  "column_break_hnwd",
+  "stock_rrp",
+  "accountant_entry_section",
+  "accountant_submitted",
+  "accountant_submitted_by",
+  "accountant_submission_date",
+  "account_item_group",
+  "account_brand",
+  "column_break_xubs",
+  "account_price_list",
+  "account_promo",
+  "account_sellout_promo",
+  "account_final_price_list",
+  "column_break_yufb",
+  "account_rrp"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_kjvb",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "IPH-.YYYY.-.#####",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "match_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Match Status",
+   "options": "Matched\nNot Matched",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "column_break_ocre",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "item_code.item_group",
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Group",
+   "options": "Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "comparison_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Comparison Status",
+   "options": "Draft\nStock Submitted\nAccountant Submitted\nMatched (Pending Final)\nUnmatched (Needs Correction)\nPending Account Manager Correction\nFinal Submitted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_wkhr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "item_code.brand",
+   "fieldname": "brand",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Brand",
+   "options": "Brand",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Item Price List History",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "effective_date",
+   "fieldtype": "Date",
+   "label": "Effective Date",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.stock_submitted && doc.accountant_submitted",
+   "fieldname": "comparison_results_section",
+   "fieldtype": "Section Break",
+   "label": "Comparison Results"
+  },
+  {
+   "fieldname": "match_item_group",
+   "fieldtype": "Data",
+   "label": "Match Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_brand",
+   "fieldtype": "Data",
+   "label": "Match Brand",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_zdod",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "match_price_list",
+   "fieldtype": "Data",
+   "label": "Match Price List",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_promo",
+   "fieldtype": "Data",
+   "label": "Match Promo",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_sellout_promo",
+   "fieldtype": "Data",
+   "label": "Match Sellout Promo",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_final_price_list",
+   "fieldtype": "Data",
+   "label": "Match Final Price List",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sdou",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "match_rrp",
+   "fieldtype": "Data",
+   "label": "Match RRP",
+   "read_only": 1
+  },
+  {
+   "depends_on": " eval:doc.needs_manager_correction",
+   "fieldname": "manager_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Manager Correction"
+  },
+  {
+   "default": "0",
+   "description": "Set when Account Manager refuses submission and needs to correct data",
+   "fieldname": "needs_manager_correction",
+   "fieldtype": "Check",
+   "label": "Needs Manager Correction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "manager_correction_by",
+   "fieldtype": "Link",
+   "label": "Manager Correction By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ogij",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "manager_correction_date",
+   "fieldtype": "Data",
+   "label": "Manager Correction Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_user_entry_section",
+   "fieldtype": "Section Break",
+   "label": "Stock User Entry"
+  },
+  {
+   "default": "0",
+   "fieldname": "stock_submitted",
+   "fieldtype": "Check",
+   "label": "Stock User Submitted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_submitted_by",
+   "fieldtype": "Link",
+   "label": "Stock User Submitted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_submission_date",
+   "fieldtype": "Datetime",
+   "label": "Stock User Submission Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_item_group",
+   "fieldtype": "Link",
+   "label": "Stock User Item Group",
+   "options": "Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_brand",
+   "fieldtype": "Link",
+   "label": "Stock User Brand",
+   "options": "Brand",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_uyka",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_price_list",
+   "fieldtype": "Currency",
+   "label": "Stock User Price List"
+  },
+  {
+   "fieldname": "stock_promo",
+   "fieldtype": "Currency",
+   "label": "Stock User Promo"
+  },
+  {
+   "fieldname": "stock_sellout_promo",
+   "fieldtype": "Currency",
+   "label": "Stock User Sellout Promo"
+  },
+  {
+   "bold": 1,
+   "description": "Auto-calculated: (Price List - Promo - Sellout Promo)",
+   "fieldname": "stock_final_price_list",
+   "fieldtype": "Currency",
+   "label": "Stock User Final Price List",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_hnwd",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_rrp",
+   "fieldtype": "Currency",
+   "label": "Stock User RRP"
+  },
+  {
+   "fieldname": "accountant_entry_section",
+   "fieldtype": "Section Break",
+   "label": "Accountant Entry"
+  },
+  {
+   "default": "0",
+   "fieldname": "accountant_submitted",
+   "fieldtype": "Check",
+   "label": "Accountant Submitted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accountant_submitted_by",
+   "fieldtype": "Link",
+   "label": "Accountant Submitted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accountant_submission_date",
+   "fieldtype": "Datetime",
+   "label": "Accountant Submission Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_item_group",
+   "fieldtype": "Link",
+   "label": "Accountant Item Group",
+   "options": "Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_brand",
+   "fieldtype": "Link",
+   "label": "Accountant Brand",
+   "options": "Brand",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_xubs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "account_price_list",
+   "fieldtype": "Currency",
+   "label": "Accountant Price List"
+  },
+  {
+   "fieldname": "account_promo",
+   "fieldtype": "Currency",
+   "label": "Accountant Promo"
+  },
+  {
+   "fieldname": "account_sellout_promo",
+   "fieldtype": "Currency",
+   "label": "Accountant Sellout Promo"
+  },
+  {
+   "bold": 1,
+   "description": "Auto-calculated: (Price List - Promo - Sellout Promo)",
+   "fieldname": "account_final_price_list",
+   "fieldtype": "Currency",
+   "label": "Accountant Final Price List",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_yufb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "account_rrp",
+   "fieldtype": "Currency",
+   "label": "Accountant RRP"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-12-30 23:48:36.864566",
+ "modified_by": "Administrator",
+ "module": "Electro Zone",
+ "name": "Item Price List History",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
