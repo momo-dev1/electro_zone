@@ -5,6 +5,41 @@ Purchase Order event handlers for electro_zone app
 import frappe
 
 
+# ============================================================================
+# API METHODS (Whitelisted for client-side access)
+# ============================================================================
+
+
+@frappe.whitelist()
+def get_po_ordered_qty(po_reference=None, item_code=None):
+	"""Get ordered quantity from Purchase Order for barcode scanning.
+
+	Runs with elevated permissions (bypasses Stock User restrictions).
+
+	Args:
+		po_reference: Purchase Order name
+		item_code: Item code
+
+	Returns:
+		dict: Success status and ordered quantity or error
+	"""
+	if not po_reference or not item_code:
+		return {"success": False, "error": "Missing po_reference or item_code"}
+
+	# Get ordered quantity from Purchase Order Item
+	ordered_qty = frappe.db.get_value("Purchase Order Item", {"parent": po_reference, "item_code": item_code}, "qty")
+
+	if ordered_qty:
+		return {"success": True, "ordered_qty": ordered_qty}
+	else:
+		return {"success": False, "error": "Item not found in Purchase Order"}
+
+
+# ============================================================================
+# EVENT HANDLERS
+# ============================================================================
+
+
 def validate_supplier_items(doc, method=None):
 	"""Validate that all items in PO belong to selected supplier.
 

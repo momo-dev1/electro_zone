@@ -48,8 +48,10 @@ app_license = "mit"
 doctype_js = {
 	"Item": "public/js/item.js",
 	"Purchase Receipt": "public/js/purchase_receipt.js",
+	"Purchase Order": "public/js/purchase_order.js",
 	"Sales Order": "public/js/sales_order.js",
-	"Delivery Note": "public/js/delivery_note.js"
+	"Delivery Note": "public/js/delivery_note.js",
+	"Customer": "public/js/customer.js"
 }
 
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}

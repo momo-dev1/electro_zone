@@ -34,7 +34,7 @@ frappe.ui.form.on("Delivery Note", {
 					frm.save().then(function () {
 						// Call API to issue return
 						frappe.call({
-							method: "issue_dn_return",
+							method: "electro_zone.electro_zone.handlers.delivery_note.issue_dn_return",
 							args: {
 								dn_return_name: frm.doc.name,
 							},
@@ -70,7 +70,7 @@ frappe.ui.form.on("Delivery Note", {
 						function () {
 							// Call API to receive return
 							frappe.call({
-								method: "receive_dn_return",
+								method: "electro_zone.electro_zone.handlers.delivery_note.receive_dn_return",
 								args: {
 									dn_return_name: frm.doc.name,
 								},

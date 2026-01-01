@@ -9,6 +9,171 @@ import frappe
 import frappe.utils
 
 
+# ============================================================================
+# API METHODS (Whitelisted for client-side access)
+# ============================================================================
+
+
+@frappe.whitelist()
+def receive_dn_return(dn_return_name=None):
+	"""Transition DN Return from Return Issued to Return Received.
+
+	Creates Credit Note, updates balance, returns stock.
+
+	Args:
+		dn_return_name: Delivery Note Return name
+
+	Returns:
+		dict: Success status and message
+	"""
+	if not dn_return_name:
+		return {"success": False, "message": "DN Return name is required"}
+
+	# Get DN Return document
+	dn_return = frappe.get_doc("Delivery Note", dn_return_name)
+
+	# Validate it's a return and in correct status
+	if dn_return.is_return != 1:
+		return {"success": False, "message": "This is not a DN Return"}
+
+	if dn_return.custom_return_status != "Return Issued":
+		return {"success": False, "message": "DN Return must be in 'Return Issued' status"}
+
+	# Find the original Sales Invoice
+	sales_invoices = frappe.db.get_all(
+		"Sales Invoice Item", filters={"delivery_note": dn_return.return_against}, fields=["parent"], distinct=True
+	)
+
+	if not sales_invoices:
+		return {"success": False, "message": f"No Sales Invoice found for original DN: {dn_return.return_against}"}
+
+	original_si_name = sales_invoices[0].parent
+
+	# Check if Credit Note already exists
+	existing_credit_note = frappe.db.get_all(
+		"Sales Invoice",
+		filters={"is_return": 1, "return_against": original_si_name, "docstatus": ["in", [0, 1]]},
+		limit=1,
+	)
+
+	if existing_credit_note:
+		return {"success": False, "message": f"Credit Note already exists: {existing_credit_note[0].name}"}
+
+	try:
+		# STEP 1: Get original source warehouse from Sales Order
+		so_name = None
+		original_source_warehouse = None
+
+		# Find SO from original DN (not DN Return)
+		so_names = frappe.db.sql(
+			"""
+			SELECT DISTINCT dni.against_sales_order
+			FROM `tabDelivery Note Item` dni
+			WHERE dni.parent = %s
+				AND dni.against_sales_order IS NOT NULL
+				AND dni.against_sales_order != ''
+		""",
+			(dn_return.return_against,),
+			as_dict=1,
+		)
+
+		if so_names and len(so_names) > 0:
+			so_name = so_names[0].against_sales_order
+			original_source_warehouse = frappe.db.get_value("Sales Order", so_name, "custom_source_warehouse")
+
+		if not original_source_warehouse:
+			frappe.throw(
+				f"Cannot find original source warehouse from Sales Order {so_name or 'Unknown'}. "
+				"Returns must go to the original source warehouse, not Hold warehouse."
+			)
+
+		# STEP 2: Update DN Return items' warehouse to original source warehouse
+		for item in dn_return.items:
+			frappe.db.set_value("Delivery Note Item", item.name, "warehouse", original_source_warehouse)
+
+		# Reload DN Return to get updated warehouse values
+		dn_return.reload()
+
+		# STEP 3: Update DN Return status to "Return Received"
+		frappe.db.set_value(
+			"Delivery Note",
+			dn_return_name,
+			{"custom_return_status": "Return Received", "status": "Return Received", "workflow_state": "Return Received"},
+		)
+
+		# STEP 4: Create Credit Note
+		credit_note = frappe.new_doc("Sales Invoice")
+		credit_note.customer = dn_return.customer
+		credit_note.company = dn_return.company
+		credit_note.posting_date = frappe.utils.nowdate()
+		credit_note.posting_time = frappe.utils.nowtime()
+		credit_note.set_posting_time = 1
+		credit_note.is_return = 1
+		credit_note.return_against = original_si_name
+		credit_note.custom_from_receive_return_api = 1
+		credit_note.customer_name = dn_return.customer_name
+
+		if dn_return.get("contact_mobile"):
+			credit_note.contact_mobile = dn_return.contact_mobile
+
+		# Copy items from DN Return
+		for item in dn_return.items:
+			credit_note.append(
+				"items",
+				{
+					"item_code": item.item_code,
+					"item_name": item.item_name,
+					"description": item.description,
+					"qty": item.qty,
+					"uom": item.uom,
+					"stock_uom": item.stock_uom,
+					"conversion_factor": item.conversion_factor,
+					"rate": item.rate,
+					"amount": item.amount,
+					"warehouse": item.warehouse,
+					"delivery_note": dn_return.name,
+					"dn_detail": item.name,
+				},
+			)
+
+		# Insert and submit Credit Note
+		credit_note.insert()
+		credit_note.submit()
+
+		# STEP 5: Update Sales Order
+		if so_name:
+			frappe.db.set_value(
+				"Sales Order",
+				so_name,
+				{
+					"custom_is_returned": 1,
+					"custom_return_date": frappe.utils.nowdate(),
+					"custom_return_reference": dn_return_name,
+					"status": "Closed",
+				},
+			)
+
+		# Get updated balance for response
+		updated_balance = frappe.db.get_value("Customer", dn_return.customer, "custom_current_balance") or 0
+
+		return {
+			"success": True,
+			"message": f"Return received successfully. Credit Note: {credit_note.name}, Customer Balance: {updated_balance}",
+		}
+
+	except Exception as e:
+		# Rollback DN Return status if Credit Note creation fails
+		frappe.db.set_value("Delivery Note", dn_return_name, {"custom_return_status": "Return Issued", "status": "Return Issued"})
+
+		frappe.log_error(f"DN Return Error: {str(e)}", "DN Return Processing Failed")
+		return {"success": False, "message": f"Failed to process return: {str(e)}"}
+
+
+# ============================================================================
+# EVENT HANDLERS & HELPER FUNCTIONS
+# ============================================================================
+
+
 # Warehouse field mappings (used across multiple handlers)
 WAREHOUSE_FIELDS = {
 	"custom_stock_store_display": "Store Display - EZ",

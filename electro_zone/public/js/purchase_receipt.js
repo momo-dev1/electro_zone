@@ -96,7 +96,7 @@ frappe.ui.form.on("Purchase Receipt", {
 
     // Call Server Script API (runs with elevated permissions)
     frappe.call({
-      method: "get_po_ordered_qty",
+      method: "electro_zone.electro_zone.handlers.purchase_order.get_po_ordered_qty",
       args: {
         po_reference: po_reference,
         item_code: item_code,

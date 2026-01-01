@@ -212,8 +212,7 @@ function recalculate_final_price_and_rebate(frm) {
 		indicator: "green",
 	});
 
-	frm
-		.save()
+	frm.save()
 		.then(() => {
 			// Now call the API to update Rebate List
 			call_rebate_recalculation_api(frm);
@@ -228,7 +227,7 @@ function recalculate_final_price_and_rebate(frm) {
 
 function call_rebate_recalculation_api(frm) {
 	frappe.call({
-		method: "recalculate_rebate_for_item",
+		method: "electro_zone.electro_zone.doctype.rebate_list.rebate_list.recalculate_rebate_for_item",
 		args: {
 			item_code: frm.doc.name,
 		},
@@ -250,9 +249,7 @@ function call_rebate_recalculation_api(frm) {
 				}
 			} else if (r.message && !r.message.success) {
 				frappe.show_alert({
-					message: __(
-						r.message.message || "Failed to update Rebate List records."
-					),
+					message: __(r.message.message || "Failed to update Rebate List records."),
 					indicator: "orange",
 				});
 			} else {
@@ -274,12 +271,9 @@ function call_rebate_recalculation_api(frm) {
 
 // Load ExcelJS library for Excel generation
 if (!window.ExcelJS) {
-	frappe.require(
-		"https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js",
-		function () {
-			//nothing
-		}
-	);
+	frappe.require("https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js", function () {
+		//nothing
+	});
 }
 
 frappe.listview_settings["Item"] = frappe.listview_settings["Item"] || {};
@@ -339,9 +333,7 @@ function generate_item_stock_excel() {
 	if (!window.ExcelJS) {
 		frappe.msgprint({
 			title: __("Library Not Loaded"),
-			message: __(
-				"ExcelJS library is still loading. Please try again in a moment."
-			),
+			message: __("ExcelJS library is still loading. Please try again in a moment."),
 			indicator: "orange",
 		});
 		return;
@@ -358,7 +350,7 @@ function generate_item_stock_excel() {
 
 	// Call server API to get item data
 	frappe.call({
-		method: "item_list_get_items_with_stock",
+		method: "electro_zone.electro_zone.handlers.item.item_list_get_items_with_stock",
 		type: "GET",
 		freeze: true,
 		freeze_message: __("Loading item data..."),
@@ -409,11 +401,7 @@ function generate_item_stock_excel() {
 					// Add data rows with colors and borders
 					items.forEach((item) => {
 						// Prepare row data
-						const rowData = [
-							item.item_code,
-							item.custom_item_model,
-							item.description,
-						];
+						const rowData = [item.item_code, item.custom_item_model, item.description];
 
 						// Add warehouse quantities as text labels
 						warehouses.forEach((warehouse) => {
@@ -460,9 +448,7 @@ function generate_item_stock_excel() {
 					worksheet.getColumn(9).width = 35; // Hold (Reserved / Pending Shipment) - EZ
 
 					// Generate filename with timestamp
-					const timestamp = frappe.datetime
-						.now_datetime()
-						.replace(/[\s:]/g, "_");
+					const timestamp = frappe.datetime.now_datetime().replace(/[\s:]/g, "_");
 					const filename = `Item_Stock_Export_${timestamp}.xlsx`;
 
 					// Generate Excel file and download
