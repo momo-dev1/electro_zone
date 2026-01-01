@@ -148,6 +148,75 @@ doctype_js = {"Item" : "public/js/item.js"}
 # 	}
 # }
 
+doc_events = {
+	"Item": {
+		"validate": "electro_zone.electro_zone.handlers.item.validate_uniqueness",
+		"before_update_after_submit": "electro_zone.electro_zone.handlers.item.auto_assign_supplier_from_brand",
+	},
+	"Purchase Order": {
+		"validate": [
+			"electro_zone.electro_zone.handlers.purchase_order.validate_supplier_items",
+			"electro_zone.electro_zone.handlers.purchase_order.auto_sync_standard_buying_on_item_add",
+			"electro_zone.electro_zone.handlers.purchase_order.sync_price_edit_status",
+		]
+	},
+	"Sales Order": {
+		"before_insert": "electro_zone.electro_zone.handlers.sales_order.recalculate_amount",
+		"validate": "electro_zone.electro_zone.handlers.sales_order.validate_discount",
+		"before_update_after_submit": "electro_zone.electro_zone.handlers.sales_order.force_closed_if_returned",
+		"before_cancel": "electro_zone.electro_zone.handlers.sales_order.validate_cancellation",
+		"on_submit": [
+			"electro_zone.electro_zone.handlers.sales_order.move_to_hold",
+			"electro_zone.electro_zone.handlers.sales_order.deduct_balance"
+		],
+		"on_cancel": "electro_zone.electro_zone.handlers.sales_order.cancel_and_return_stock"
+	},
+	"Delivery Note": {
+		"before_submit": "electro_zone.electro_zone.handlers.delivery_note.validate_sales_order_reference",
+		"before_cancel": "electro_zone.electro_zone.handlers.delivery_note.block_cancel_if_delivered",
+		"on_submit": [
+			"electro_zone.electro_zone.handlers.delivery_note.update_item_stock_fields",
+			"electro_zone.electro_zone.handlers.delivery_note.create_reference_ledger_entry",
+			"electro_zone.electro_zone.handlers.delivery_note.auto_invoice_on_out_for_delivery",
+			"electro_zone.electro_zone.handlers.delivery_note.auto_return_stock_on_delivery_failed",
+		],
+		"on_cancel": "electro_zone.electro_zone.handlers.delivery_note.auto_close_so_on_cancel",
+	},
+	"Purchase Receipt": {
+		"validate": [
+			"electro_zone.electro_zone.handlers.purchase_receipt.auto_populate_rate",
+			"electro_zone.electro_zone.handlers.purchase_receipt.validate_received_quantity",
+			"electro_zone.electro_zone.handlers.purchase_receipt.strict_po_validation"
+		],
+		"on_submit": "electro_zone.electro_zone.handlers.purchase_receipt.update_item_stock_fields"
+	},
+	"Stock Entry": {
+		"on_submit": "electro_zone.electro_zone.handlers.stock_entry.update_item_stock_fields"
+	},
+	"Payment Entry": {
+		"validate": "electro_zone.electro_zone.handlers.payment_entry.auto_allocate_outstanding_invoices_fifo",
+		"on_submit": [
+			"electro_zone.electro_zone.handlers.payment_entry.balance_topup_and_refund_handler",
+			"electro_zone.electro_zone.handlers.payment_entry.update_so_on_payment"
+		]
+	},
+	"Sales Invoice": {
+		"before_insert": "electro_zone.electro_zone.handlers.sales_invoice.block_credit_note_if_dn_return_not_received",
+		"before_submit": "electro_zone.electro_zone.handlers.sales_invoice.auto_allocate_unallocated_payment_entries",
+		"on_submit": [
+			"electro_zone.electro_zone.handlers.sales_invoice.auto_allocate_balance",
+			"electro_zone.electro_zone.handlers.sales_invoice.update_so_billing_status_only",
+		],
+	},
+	"Customer": {
+		"validate": "electro_zone.electro_zone.handlers.customer.validate_phone_uniqueness",
+	},
+	"Customer Quick Create": {
+		"before_submit": "electro_zone.electro_zone.handlers.customer_quick_create.validate_phone_uniqueness",
+		"on_submit": "electro_zone.electro_zone.handlers.customer_quick_create.auto_create_records",
+	},
+}
+
 # Scheduled Tasks
 # ---------------
 

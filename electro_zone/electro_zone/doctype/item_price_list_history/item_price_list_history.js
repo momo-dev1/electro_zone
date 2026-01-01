@@ -243,7 +243,7 @@ function stock_submit(frm) {
   // Save the document first, then call API
   let submit_action = () => {
     frappe.call({
-      method: "stock_submit_price_history",
+      method: "electro_zone.electro_zone.doctype.item_price_list_history.item_price_list_history.stock_submit_price_history",
       args: {
         name: frm.doc.name,
       },
@@ -303,7 +303,7 @@ function accountant_submit(frm) {
   // Save the document first, then call API
   let submit_action = () => {
     frappe.call({
-      method: "accountant_submit_price_history",
+      method: "electro_zone.electro_zone.doctype.item_price_list_history.item_price_list_history.accountant_submit_price_history",
       args: {
         name: frm.doc.name,
       },
@@ -354,7 +354,7 @@ function refuse_submit(frm) {
     () => {
       // Call API
       frappe.call({
-        method: "refuse_submit_price_history",
+        method: "electro_zone.electro_zone.doctype.item_price_list_history.item_price_list_history.refuse_submit_price_history",
         args: {
           name: frm.doc.name,
         },
@@ -376,7 +376,7 @@ function manager_revalidate(frm) {
   // Save the document first if dirty, then call API
   let revalidate_action = () => {
     frappe.call({
-      method: "manager_revalidate_price_history",
+      method: "electro_zone.electro_zone.doctype.item_price_list_history.item_price_list_history.manager_revalidate_price_history",
       args: {
         name: frm.doc.name,
       },

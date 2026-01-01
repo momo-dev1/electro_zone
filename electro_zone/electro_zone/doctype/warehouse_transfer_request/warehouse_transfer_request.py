@@ -301,7 +301,7 @@ def submit_for_approval(transfer_name):
 		# Create Stock Entry
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Transfer"
-		se.company = doc.company or frappe.db.get_single_value("Global Defaults", "default_company")
+		se.company = frappe.db.get_single_value("Global Defaults", "default_company")
 		se.posting_date = today()
 
 		for item in doc.items:
@@ -316,8 +316,6 @@ def submit_for_approval(transfer_name):
 					"s_warehouse": doc.source_warehouse,
 					"t_warehouse": doc.target_warehouse,
 					"uom": item.uom,
-					"stock_uom": item.stock_uom,
-					"conversion_factor": item.conversion_factor or 1,
 				},
 			)
 
@@ -619,8 +617,6 @@ def confirm_receipt(transfer_name, received_items):
 						"item_code": item.item_code,
 						"qty": receiving_now,
 						"uom": item.uom,
-						"stock_uom": item.stock_uom,
-						"conversion_factor": item.conversion_factor or 1,
 					}
 				)
 
@@ -632,7 +628,7 @@ def confirm_receipt(transfer_name, received_items):
 	if items_to_transfer:
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Transfer"
-		se.company = doc.company or frappe.db.get_single_value("Global Defaults", "default_company")
+		se.company = frappe.db.get_single_value("Global Defaults", "default_company")
 		se.posting_date = today()
 
 		for item_data in items_to_transfer:
@@ -644,8 +640,6 @@ def confirm_receipt(transfer_name, received_items):
 					"s_warehouse": doc.source_warehouse,
 					"t_warehouse": doc.target_warehouse,
 					"uom": item_data["uom"],
-					"stock_uom": item_data["stock_uom"],
-					"conversion_factor": item_data["conversion_factor"],
 				},
 			)
 

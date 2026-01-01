@@ -933,7 +933,7 @@ function can_receive(frm) {
 
 function submit_for_approval(frm) {
   frappe.call({
-    method: "warehouse_transfer_submit_for_approval",
+    method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.submit_for_approval",
     args: { transfer_name: frm.doc.name },
     freeze: true,
     freeze_message: __("Submitting for approval..."),
@@ -950,7 +950,7 @@ function approve_transfer(frm) {
 
 function reject_transfer(frm, reason) {
   frappe.call({
-    method: "warehouse_transfer_reject_transfer",
+    method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.reject_transfer",
     args: {
       transfer_name: frm.doc.name,
       rejection_reason: reason,
@@ -1069,7 +1069,7 @@ function save_and_approve(frm) {
 
 function call_approve_api(frm, accepted_items) {
   frappe.call({
-    method: "warehouse_transfer_approve_transfer",
+    method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.approve_transfer",
     args: {
       transfer_name: frm.doc.name,
       accepted_items: JSON.stringify(accepted_items),
@@ -1229,7 +1229,7 @@ function process_shipment(frm, original_quantities_snapshot) {
 
 function call_ship_api(frm, shipped_items) {
   frappe.call({
-    method: "warehouse_transfer_mark_as_shipped",
+    method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.mark_as_shipped",
     args: {
       transfer_name: frm.doc.name,
       shipped_items: JSON.stringify(shipped_items),
@@ -1377,7 +1377,7 @@ function process_receipt(frm, original_quantities_snapshot) {
 
 function call_receive_api(frm, received_items) {
   frappe.call({
-    method: "warehouse_transfer_confirm_receipt",
+    method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.confirm_receipt",
     args: {
       transfer_name: frm.doc.name,
       received_items: JSON.stringify(received_items),
@@ -1614,7 +1614,7 @@ function upload_items_from_excel(frm) {
         );
 
         frappe.call({
-          method: "validate_items_for_upload",
+          method: "electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.validate_items_for_upload",
           args: {
             items: JSON.stringify(items_to_validate),
             source_warehouse: frm.doc.source_warehouse,
@@ -1877,7 +1877,7 @@ frappe.ui.form.on("Warehouse Transfer Request", {
 
       // Call Server API to get accepted_qty (bypasses permissions)
       frappe.call({
-        method: 'warehouse_transfer_get_accepted_qty',
+        method: 'electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.get_accepted_qty',
         args: {
           transfer_name: frm.doc.name,
           item_code: item_row.item_code
