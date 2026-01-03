@@ -54,7 +54,10 @@ doctype_js = {
 	"Customer": "public/js/customer.js"
 }
 
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_list_js = {
+	"Item": "public/js/item_list.js"
+}
+
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -222,6 +225,10 @@ doc_events = {
 		"before_submit": "electro_zone.electro_zone.handlers.customer_quick_create.validate_phone_uniqueness",
 		"on_submit": "electro_zone.electro_zone.handlers.customer_quick_create.auto_create_records",
 	},
+	"GL Entry": {
+		"on_submit": "electro_zone.electro_zone.handlers.gl_entry.sync_customer_balance_on_gl_submit",
+		"on_cancel": "electro_zone.electro_zone.handlers.gl_entry.sync_customer_balance_on_gl_cancel",
+	},
 }
 
 # Scheduled Tasks
@@ -321,4 +328,12 @@ doc_events = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+# Fixtures
+# --------
+# Export fixtures for this app
+
+fixtures = [
+	{"dt": "Custom Field", "filters": [["name", "in", ["Item-platform_asin_sku"]]]},
+	"Client Script",
+]
 

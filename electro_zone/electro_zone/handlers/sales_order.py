@@ -175,14 +175,13 @@ def validate_cancellation(doc, method=None):
 
 
 def move_to_hold(doc, method=None):
-	"""Move stock to Hold warehouse and create Delivery Note in Pending Dispatch.
+	"""Move stock to Hold warehouse.
 
 	Workflow:
 	1. Capture source warehouse for later stock return
 	2. Skip if auto-created or Pending Review
 	3. Create Stock Entry to transfer stock to Hold warehouse
 	4. Update Sales Order items to use Hold warehouse
-	5. Auto-create Delivery Note in Pending Dispatch state
 
 	Args:
 		doc: Sales Order document
@@ -303,52 +302,11 @@ def move_to_hold(doc, method=None):
 		alert=True,
 	)
 
-	# Auto-create Delivery Note in Pending Dispatch state
-	dn = frappe.new_doc("Delivery Note")
-	dn.customer = doc.customer
-	dn.posting_date = frappe.utils.nowdate()
-	dn.posting_time = frappe.utils.nowtime()
-	dn.company = doc.company
-	dn.set_posting_time = 1
-
-	for so_item in doc.items:
-		dn.append(
-			"items",
-			{
-				"item_code": so_item.item_code,
-				"item_name": so_item.item_name,
-				"description": so_item.description,
-				"qty": so_item.qty,
-				"rate": so_item.rate,
-				"warehouse": hold_warehouse,
-				"uom": so_item.uom,
-				"stock_uom": so_item.stock_uom,
-				"conversion_factor": so_item.conversion_factor or 1,
-				"against_sales_order": doc.name,
-				"so_detail": so_item.name,
-			},
-		)
-
-	dn.insert(ignore_permissions=True)
-
-	frappe.db.set_value("Delivery Note", dn.name, "workflow_state", "Pending Dispatch", update_modified=False)
-
-	dn.add_comment("Comment", f"Auto-created from Sales Order {doc.name} on submit. Awaiting Stock Manager review.")
-
-	doc.add_comment("Comment", f'Delivery Note <a href="/app/delivery-note/{dn.name}">{dn.name}</a> created in Pending Dispatch state')
-
-	frappe.msgprint(
-		f"Delivery Note <b>{dn.name}</b> created in Pending Dispatch state",
-		indicator="blue",
-		title="DN Created",
-		alert=True,
-	)
-
 
 def deduct_balance(doc, method=None):
-	"""Deduct Sales Order total from customer balance on submit.
+	"""Create reference-only ledger entry for Sales Order submission.
 
-	Creates Customer Balance Ledger entry for audit trail.
+	Balance is now tracked in GL Entry. This creates an audit trail entry only.
 
 	Args:
 		doc: Sales Order document
@@ -357,16 +315,10 @@ def deduct_balance(doc, method=None):
 	customer = doc.customer
 	so_total = doc.grand_total
 
-	# Get current balance (can go negative - credit sales allowed)
+	# Get current balance from GL (for display only)
 	current_balance = frappe.db.get_value("Customer", customer, "custom_current_balance") or 0.0
 
-	# Calculate new balance
-	new_balance = current_balance - so_total
-
-	# Update balance
-	frappe.db.set_value("Customer", customer, "custom_current_balance", new_balance, update_modified=False)
-
-	# Create Customer Balance Ledger entry
+	# Create REFERENCE-ONLY Customer Balance Ledger entry
 	ledger = frappe.new_doc("Customer Balance Ledger")
 	ledger.transaction_date = doc.transaction_date
 	ledger.posting_time = frappe.utils.nowtime()
@@ -375,30 +327,21 @@ def deduct_balance(doc, method=None):
 	ledger.reference_doctype = "Sales Order"
 	ledger.reference_document = doc.name
 	ledger.reference_date = doc.transaction_date
-	ledger.debit_amount = so_total
-	ledger.credit_amount = 0.0
+	ledger.debit_amount = 0.0  # Reference only
+	ledger.credit_amount = 0.0  # Reference only
 	ledger.balance_before = current_balance
-	ledger.running_balance = new_balance
-	ledger.remarks = f"Sales Order {doc.name} - Balance deducted (Order committed)"
+	ledger.running_balance = current_balance  # Unchanged
+	ledger.remarks = f"Reference only - GL tracked. SO {doc.name} submitted (Amount: {frappe.format_value(so_total, {'fieldtype': 'Currency'})})"
 	ledger.company = doc.company
 	ledger.created_by = frappe.session.user
 	ledger.insert(ignore_permissions=True)
 
-	# Show balance change notification
-	balance_note = (
-		"<b>Note:</b> Customer has credit (prepaid)"
-		if new_balance > 0
-		else "<b>Note:</b> Fully settled" if new_balance == 0 else "<b>Note:</b> Customer owes money (credit sale)"
-	)
-
+	# Show notification
 	frappe.msgprint(
-		"Customer balance updated:<br>"
-		f"• Previous balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b><br>"
-		f"• Order amount: <b>{frappe.format_value(so_total, {'fieldtype': 'Currency'})}</b><br>"
-		f"• New balance: <b>{frappe.format_value(new_balance, {'fieldtype': 'Currency'})}</b><br><br>"
-		f"{balance_note}",
-		indicator="green" if new_balance >= 0 else "orange",
-		title="Balance Updated",
+		f"Sales Order created. Balance tracked in GL.<br>"
+		f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b>",
+		indicator="blue",
+		title="SO Submitted",
 	)
 
 
@@ -559,17 +502,12 @@ def cancel_and_return_stock(doc, method=None):
 					title="No Items to Return",
 				)
 
-	# Balance restoration logic
+	# Create reference-only ledger entry for cancellation
 	so_total = doc.grand_total
 	customer = doc.customer
 	current_balance = frappe.db.get_value("Customer", customer, "custom_current_balance") or 0.0
 
-	# Restore balance (reverse deduction)
-	new_balance = current_balance + so_total
-
-	frappe.db.set_value("Customer", customer, "custom_current_balance", new_balance, update_modified=False)
-
-	# Create REVERSAL ledger entry
+	# Create REFERENCE-ONLY ledger entry
 	ledger = frappe.new_doc("Customer Balance Ledger")
 	ledger.transaction_date = frappe.utils.today()
 	ledger.posting_time = frappe.utils.nowtime()
@@ -578,23 +516,19 @@ def cancel_and_return_stock(doc, method=None):
 	ledger.reference_doctype = "Sales Order"
 	ledger.reference_document = doc.name
 	ledger.reference_date = doc.transaction_date
-	ledger.debit_amount = 0.0
-	ledger.credit_amount = so_total
+	ledger.debit_amount = 0.0  # Reference only
+	ledger.credit_amount = 0.0  # Reference only
 	ledger.balance_before = current_balance
-	ledger.running_balance = new_balance
-	ledger.remarks = f"REVERSAL: Sales Order {doc.name} cancelled - Balance restored"
+	ledger.running_balance = current_balance  # Unchanged
+	ledger.remarks = f"Reference only - GL tracked. SO {doc.name} cancelled (Amount: {frappe.format_value(so_total, {'fieldtype': 'Currency'})})"
 	ledger.company = doc.company
 	ledger.created_by = frappe.session.user
 	ledger.insert(ignore_permissions=True)
 
-	# Show balance restoration notification
+	# Show cancellation notification
 	frappe.msgprint(
-		"Sales Order cancelled successfully.<br><br>"
-		"<b>Balance Restored:</b><br>"
-		f"• Previous balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b><br>"
-		f"• Order amount: <b>{frappe.format_value(so_total, {'fieldtype': 'Currency'})}</b><br>"
-		f"• New balance: <b>{frappe.format_value(new_balance, {'fieldtype': 'Currency'})}</b><br><br>"
-		"Customer balance has been restored.",
-		indicator="green",
-		title="Balance Restored",
+		f"Sales Order cancelled successfully. Balance tracked in GL.<br>"
+		f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b>",
+		indicator="blue",
+		title="SO Cancelled",
 	)

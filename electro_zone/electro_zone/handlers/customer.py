@@ -3,105 +3,40 @@ Customer event handlers for electro_zone app
 """
 
 import frappe
-
-
-# ============================================================================
-# API METHODS (Whitelisted for client-side access)
-# ============================================================================
+from erpnext.selling.doctype.customer.customer import get_customer_outstanding
 
 
 @frappe.whitelist()
-def get_customer_by_phone(phone_number=None):
-	"""Search customer by phone from Address table via customer_primary_address.
+def sync_balance_from_gl(customer=None, company=None):
+	"""Sync custom_current_balance from GL Entry using get_customer_outstanding().
+
+	Syncs customer balance from ERPNext General Ledger instead of manual tracking.
+	Uses get_customer_outstanding() which includes:
+	- GL balance (debit - credit)
+	- Unbilled Sales Orders
+	- Unbilled Delivery Notes
+
+	Sign Convention:
+	- ERPNext GL: Positive outstanding = customer owes us
+	- Custom Balance: Negative = customer owes us, Positive = we owe customer
+	- Conversion: custom_current_balance = -1 * gl_outstanding
 
 	Args:
-		phone_number: Phone number to search (partial match supported)
-
-	Returns:
-		dict: Success status, customers list, and count
-	"""
-	if not phone_number:
-		return {"success": False, "message": "Phone number is required"}
-
-	# Search customer by phone in Address table
-	customers = frappe.db.sql(
-		"""
-		SELECT DISTINCT
-			c.name,
-			c.customer_name,
-			a.phone as mobile_no,
-			c.email_id,
-			c.customer_group,
-			c.territory,
-			c.custom_current_balance
-		FROM `tabCustomer` c
-		INNER JOIN `tabAddress` a ON c.customer_primary_address = a.name
-		WHERE a.phone LIKE %s
-		AND c.disabled = 0
-	""",
-		(f"%{phone_number}%",),
-		as_dict=1,
-	)
-
-	if not customers:
-		return {"success": False, "message": f"No customer found with phone number: {phone_number}"}
-
-	# Get additional details for each customer
-	for customer in customers:
-		# Get total sales
-		total_sales = frappe.db.sql(
-			"""
-			SELECT
-				COUNT(*) as total_orders,
-				SUM(grand_total) as total_amount
-			FROM `tabSales Order`
-			WHERE customer = %s
-			AND docstatus = 1
-		""",
-			(customer.name,),
-			as_dict=1,
-		)
-
-		if total_sales and len(total_sales) > 0:
-			customer["total_orders"] = total_sales[0].get("total_orders", 0)
-			customer["total_sales_amount"] = total_sales[0].get("total_amount", 0)
-		else:
-			customer["total_orders"] = 0
-			customer["total_sales_amount"] = 0
-
-		# Get last order date
-		last_order = frappe.db.get_value(
-			"Sales Order", filters={"customer": customer.name, "docstatus": 1}, fieldname="transaction_date", order_by="transaction_date desc"
-		)
-		customer["last_order_date"] = last_order
-
-	return {"success": True, "customers": customers, "count": len(customers)}
-
-
-@frappe.whitelist()
-def recalculate_customer_balance(customer=None):
-	"""Recalculate customer balances from ledger entries.
-
-	Args:
-		customer: Customer name (optional - if blank, recalculates all)
+		customer: Customer name (optional - if blank, syncs all customers)
+		company: Company name (optional - uses customer's default if not provided)
 
 	Returns:
 		dict: Success status, updated count, error count, and messages
 	"""
-	# Determine which customers to recalculate
+	# Determine which customers to sync
 	if customer:
-		customers = [customer]
+		customers = [{"name": customer}]
 	else:
-		# Recalculate ALL customers with ledger entries
-		customers = frappe.db.sql(
-			"""
-			SELECT DISTINCT customer
-			FROM `tabCustomer Balance Ledger`
-			ORDER BY customer
-		""",
-			as_dict=0,
-		)
-		customers = [c[0] for c in customers]
+		# Sync ALL customers
+		customers = frappe.db.get_all("Customer", fields=["name"], filters={"disabled": 0})
+
+	if not customers:
+		return {"success": True, "updated_count": 0, "message": "No customers to sync."}
 
 	updated_count = 0
 	error_count = 0
@@ -109,34 +44,66 @@ def recalculate_customer_balance(customer=None):
 
 	# Process each customer
 	for cust in customers:
+		cust_name = cust["name"] if isinstance(cust, dict) else cust
+
 		try:
-			# Get all ledger entries for this customer (chronological order)
-			ledger_entries = frappe.db.get_all(
-				"Customer Balance Ledger",
-				filters={"customer": cust},
-				fields=["name", "debit_amount", "credit_amount", "transaction_date", "creation"],
-				order_by="transaction_date asc, creation asc",
+			# Get company for this customer
+			if not company:
+				# Use default company from system or first company
+				customer_company = frappe.defaults.get_user_default("Company")
+				if not customer_company:
+					# Use first company in the system
+					customer_company = frappe.db.get_value("Company", filters={}, fieldname="name")
+			else:
+				customer_company = company
+
+			if not customer_company:
+				frappe.log_error(f"No company found for customer {cust_name}", "GL Balance Sync Error")
+				error_count += 1
+				error_customers.append(cust_name)
+				continue
+
+			# Get GL outstanding from ERPNext
+			gl_outstanding = get_customer_outstanding(
+				customer=cust_name,
+				company=customer_company,
+				ignore_outstanding_sales_order=False,  # Include unbilled SO
 			)
 
-			# Calculate running balance from scratch
-			running_balance = 0.0
+			# Convert sign: ERPNext GL (positive = customer owes) → Custom (negative = customer owes)
+			custom_current_balance = -1 * gl_outstanding
 
-			for entry in ledger_entries:
-				# Calculate new running balance
-				running_balance = running_balance + entry.credit_amount - entry.debit_amount
-
-				# Update ledger entry running_balance field
-				frappe.db.set_value("Customer Balance Ledger", entry.name, "running_balance", running_balance, update_modified=False)
-
-			# Update customer balance (final running balance)
-			frappe.db.set_value("Customer", cust, "custom_current_balance", running_balance, update_modified=False)
+			# Update customer balance field
+			frappe.db.set_value(
+				"Customer",
+				cust_name,
+				"custom_current_balance",
+				custom_current_balance,
+				update_modified=False,
+			)
 
 			updated_count += 1
 
 		except Exception as e:
 			error_count += 1
-			error_customers.append(cust)
-			frappe.log_error(f"Recalculation failed for customer {cust}: {str(e)}", "Customer Balance Recalculation Error")
+			error_customers.append(cust_name)
+			frappe.log_error(
+				f"GL balance sync failed for customer {cust_name}: {str(e)}", "GL Balance Sync Error"
+			)
+
+	# Get final balance for single customer sync (for display)
+	final_balance = None
+	gl_balance = None
+	if customer and updated_count == 1:
+		final_balance = frappe.db.get_value("Customer", customer, "custom_current_balance")
+		# Get GL balance for display
+		try:
+			company_for_display = company or frappe.defaults.get_user_default("Company")
+			if not company_for_display:
+				company_for_display = frappe.db.get_value("Company", filters={}, fieldname="name")
+			gl_balance = get_customer_outstanding(customer=customer, company=company_for_display, ignore_outstanding_sales_order=False)
+		except:
+			pass
 
 	# Prepare response
 	if error_count > 0:
@@ -145,15 +112,36 @@ def recalculate_customer_balance(customer=None):
 			"updated_count": updated_count,
 			"error_count": error_count,
 			"error_customers": error_customers,
-			"message": f"Recalculated {updated_count} customers, but {error_count} failed. Check Error Log.",
+			"message": f"Synced {updated_count} customers, but {error_count} failed. Check Error Log.",
+			"gl_outstanding": gl_balance,
+			"custom_current_balance": final_balance,
 		}
 	else:
 		return {
 			"success": True,
 			"updated_count": updated_count,
 			"error_count": 0,
-			"message": f"Successfully recalculated balances for {updated_count} customers.",
+			"message": f"Successfully synced balances from GL for {updated_count} customers.",
+			"gl_outstanding": gl_balance,
+			"custom_current_balance": final_balance,
 		}
+
+
+@frappe.whitelist()
+def recalculate_customer_balance(customer=None):
+	"""Recalculate customer balances from GL Entry (replaces ledger-based calculation).
+
+	This function now syncs balances from ERPNext General Ledger instead of
+	recalculating from Customer Balance Ledger entries.
+
+	Args:
+		customer: Customer name (optional - if blank, recalculates all)
+
+	Returns:
+		dict: Success status, updated count, error count, and messages
+	"""
+	# Delegate to GL sync function
+	return sync_balance_from_gl(customer=customer)
 
 
 # ============================================================================
@@ -161,7 +149,7 @@ def recalculate_customer_balance(customer=None):
 # ============================================================================
 
 
-def validate_phone_uniqueness(doc, method=None):
+def validate_phone_uniqueness(doc, _method=None):
 	"""Validate that the phone number on primary address is unique across all customers.
 
 	Ensures no two customers can have the same phone number.
@@ -170,7 +158,7 @@ def validate_phone_uniqueness(doc, method=None):
 
 	Args:
 		doc: Customer document
-		method: Event method name (unused, required by Frappe hook signature)
+		_method: Event method name (unused, required by Frappe hook signature)
 
 	Raises:
 		frappe.ValidationError: If duplicate phone found or validation fails

@@ -1,0 +1,212 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-01-03 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_1",
+  "platform",
+  "platform_date",
+  "order_number",
+  "column_break_1",
+  "rep_name",
+  "delivery_status",
+  "section_break_items",
+  "items",
+  "section_break_totals",
+  "total_quantity",
+  "column_break_totals",
+  "total_amount",
+  "section_break_tracking",
+  "upload_file",
+  "ready_to_ship_date",
+  "shipped_date",
+  "column_break_tracking",
+  "stock_entry_ready",
+  "stock_entry_shipped",
+  "section_break_system",
+  "naming_series",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "platform",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Platform",
+   "options": "Amazon\nNoon\nJumia\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "platform_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Platform Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "order_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Order Number",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rep_name",
+   "fieldtype": "Link",
+   "label": "Rep Name",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "Pending",
+   "fieldname": "delivery_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Delivery Status",
+   "options": "Pending\nReady to Ship\nShipped\nDelivered\nCanceled\nDelivery Failed\nReturned",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_items",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Platform Order Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_totals",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "fieldname": "total_quantity",
+   "fieldtype": "Int",
+   "label": "Total Quantity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Total Amount",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_tracking",
+   "fieldtype": "Section Break",
+   "label": "Tracking"
+  },
+  {
+   "fieldname": "upload_file",
+   "fieldtype": "Attach",
+   "label": "Upload File"
+  },
+  {
+   "fieldname": "ready_to_ship_date",
+   "fieldtype": "Datetime",
+   "label": "Ready to Ship Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "shipped_date",
+   "fieldtype": "Datetime",
+   "label": "Shipped Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_tracking",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_entry_ready",
+   "fieldtype": "Link",
+   "label": "Stock Entry Ready",
+   "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_entry_shipped",
+   "fieldtype": "Link",
+   "label": "Stock Entry Shipped",
+   "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_system",
+   "fieldtype": "Section Break",
+   "label": "System"
+  },
+  {
+   "default": "PO-.YYYY.-.MM.-.DD.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PO-.YYYY.-.MM.-.DD.-.####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Platform Order",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-01-03 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Electro Zone",
+ "name": "Platform Order",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "platform_date",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "order_number",
+ "track_changes": 1
+}

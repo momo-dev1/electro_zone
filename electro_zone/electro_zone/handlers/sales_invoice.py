@@ -212,16 +212,12 @@ def update_so_billing_status_only(doc, method=None):
 
 	else:
 		# ==================================
-		# CREDIT NOTE (Sales Return)
+		# CREDIT NOTE (Sales Return) - Reference Only
 		# ==================================
-		credit_amount = abs(grand_total)
+		credit_amount_ref = abs(grand_total)  # For display in remarks
 		current_balance = frappe.db.get_value("Customer", customer, "custom_current_balance") or 0.0
-		new_balance = current_balance + credit_amount
 
-		# Update balance
-		frappe.db.set_value("Customer", customer, "custom_current_balance", new_balance, update_modified=False)
-
-		# Create ledger entry
+		# Create REFERENCE-ONLY ledger entry
 		ledger = frappe.new_doc("Customer Balance Ledger")
 		ledger.transaction_date = doc.posting_date
 		ledger.posting_time = doc.posting_time or frappe.utils.nowtime()
@@ -230,11 +226,11 @@ def update_so_billing_status_only(doc, method=None):
 		ledger.reference_doctype = "Sales Invoice"
 		ledger.reference_document = doc.name
 		ledger.reference_date = doc.posting_date
-		ledger.debit_amount = 0.0
-		ledger.credit_amount = credit_amount
+		ledger.debit_amount = 0.0  # Reference only
+		ledger.credit_amount = 0.0  # Reference only
 		ledger.balance_before = current_balance
-		ledger.running_balance = new_balance
-		ledger.remarks = f"Credit Note {doc.name} - Sales Return (Against: {doc.return_against or 'N/A'})"
+		ledger.running_balance = current_balance  # Unchanged
+		ledger.remarks = f"Reference only - GL tracked. Credit Note {doc.name} (Against: {doc.return_against or 'N/A'}, Amount: {frappe.format_value(credit_amount_ref, {'fieldtype': 'Currency'})})"
 		ledger.company = doc.company
 		ledger.created_by = frappe.session.user
 		ledger.insert(ignore_permissions=True)

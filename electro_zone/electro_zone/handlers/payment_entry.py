@@ -409,87 +409,62 @@ def _is_auto_created_from_so(pe_name: str) -> bool:
 
 
 def _process_payment_receive(doc, customer: str, current_balance: float, payment_amount: float) -> None:
-	"""Process Payment Entry of type Receive (customer paying us).
+	"""Create reference-only ledger entry for Payment Entry (Receive).
+
+	Balance is now tracked in GL Entry. This creates an audit trail entry only.
 
 	Args:
 		doc: Payment Entry document
 		customer: Customer name
-		current_balance: Current customer balance
+		current_balance: Current customer balance (from GL)
 		payment_amount: Payment amount
 	"""
-	# Customer paying us - increase balance
-	new_balance = current_balance + payment_amount
-
-	# Create ledger entry
+	# Create REFERENCE-ONLY ledger entry
 	_create_balance_ledger_entry(
 		doc=doc,
 		customer=customer,
-		debit_amount=0.0,
-		credit_amount=payment_amount,
+		debit_amount=0.0,  # Reference only
+		credit_amount=0.0,  # Reference only
 		current_balance=current_balance,
-		new_balance=new_balance,
-		remarks=f"Payment {doc.name} - {doc.mode_of_payment or 'Cash'}",
+		new_balance=current_balance,  # Unchanged
+		remarks=f"Reference only - GL tracked. Payment {doc.name} - {doc.mode_of_payment or 'Cash'} (Amount: {frappe.format_value(payment_amount, {'fieldtype': 'Currency'})})",
 	)
 
-	# Update customer balance
-	frappe.db.set_value("Customer", customer, "custom_current_balance", new_balance, update_modified=False)
-
 	frappe.msgprint(
-		f"Payment recorded. Customer balance updated to <b>{frappe.format_value(new_balance, {'fieldtype': 'Currency'})}</b>",
-		indicator="green",
-		title="Balance Updated",
+		f"Payment recorded. Balance tracked in GL.<br>"
+		f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b>",
+		indicator="blue",
+		title="Payment Recorded",
 	)
 
 
 def _process_payment_refund(doc, customer: str, current_balance: float, payment_amount: float) -> None:
-	"""Process Payment Entry of type Pay (refund to customer).
+	"""Create reference-only ledger entry for Payment Entry (Refund/Pay).
+
+	Balance is now tracked in GL Entry. This creates an audit trail entry only.
 
 	Args:
 		doc: Payment Entry document
 		customer: Customer name
-		current_balance: Current customer balance
+		current_balance: Current customer balance (from GL)
 		payment_amount: Refund amount
 	"""
-	# Show informational messages (non-blocking)
-	if current_balance <= 0:
-		frappe.msgprint(
-			f"ℹ️ Customer has no credit balance.<br><br>"
-			f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b><br><br>"
-			"Refund will create a negative balance (amount owed to customer).",
-			indicator="blue",
-			title="Balance Information",
-		)
-	elif payment_amount > current_balance:
-		frappe.msgprint(
-			f"ℹ️ Refund amount <b>{frappe.format_value(payment_amount, {'fieldtype': 'Currency'})}</b> "
-			f"exceeds customer credit balance <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b><br><br>"
-			f"Resulting balance will be negative (we owe customer: "
-			f"<b>{frappe.format_value(current_balance - payment_amount, {'fieldtype': 'Currency'})}</b>)",
-			indicator="orange",
-			title="Balance Warning",
-		)
-
-	# Process refund
-	new_balance = current_balance - payment_amount
-
-	# Create ledger entry
+	# Create REFERENCE-ONLY ledger entry
 	_create_balance_ledger_entry(
 		doc=doc,
 		customer=customer,
-		debit_amount=payment_amount,
-		credit_amount=0.0,
+		debit_amount=0.0,  # Reference only
+		credit_amount=0.0,  # Reference only
 		current_balance=current_balance,
-		new_balance=new_balance,
-		remarks=f"Refund {doc.name} - {doc.mode_of_payment or 'Cash'}",
+		new_balance=current_balance,  # Unchanged
+		remarks=f"Reference only - GL tracked. Refund {doc.name} - {doc.mode_of_payment or 'Cash'} (Amount: {frappe.format_value(payment_amount, {'fieldtype': 'Currency'})})",
 	)
 
-	# Update customer balance
-	frappe.db.set_value("Customer", customer, "custom_current_balance", new_balance, update_modified=False)
-
 	frappe.msgprint(
-		f"Refund processed. Customer balance updated to <b>{frappe.format_value(new_balance, {'fieldtype': 'Currency'})}</b>",
-		indicator="green",
-		title="Refund Complete",
+		f"Refund recorded. Balance tracked in GL.<br>"
+		f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b>",
+		indicator="blue",
+		title="Refund Recorded",
 	)
 
 	# Update SO per_billed for Credit Note refunds
