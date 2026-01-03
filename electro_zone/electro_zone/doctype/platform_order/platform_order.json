@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "naming_series:",
- "creation": "2026-01-03 12:00:00.000000",
+ "creation": "2026-01-03 12:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -10,11 +10,17 @@
   "platform",
   "platform_date",
   "order_number",
+  "customer",
   "column_break_1",
   "rep_name",
   "delivery_status",
+  "match_status",
+  "stock_status",
+  "has_unmatched_items",
+  "was_unmatched",
   "section_break_items",
   "items",
+  "unmatched_items",
   "section_break_totals",
   "total_quantity",
   "column_break_totals",
@@ -23,6 +29,7 @@
   "upload_file",
   "ready_to_ship_date",
   "shipped_date",
+  "delivery_note",
   "column_break_tracking",
   "stock_entry_ready",
   "stock_entry_shipped",
@@ -61,6 +68,13 @@
    "unique": 1
   },
   {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
@@ -82,6 +96,39 @@
    "reqd": 1
   },
   {
+   "fieldname": "match_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Match Status",
+   "options": "Fully Matched\nPartially Matched\nUnmatched\nMatched After Edit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stock_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Stock Status",
+   "options": "Stock Available\nInsufficient Stock\nNo Stock",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "has_unmatched_items",
+   "fieldtype": "Check",
+   "label": "Has Unmatched Items",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "was_unmatched",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Was Unmatched",
+   "read_only": 1
+  },
+  {
    "fieldname": "section_break_items",
    "fieldtype": "Section Break",
    "label": "Items"
@@ -89,9 +136,14 @@
   {
    "fieldname": "items",
    "fieldtype": "Table",
-   "label": "Items",
-   "options": "Platform Order Item",
-   "reqd": 1
+   "label": "Matched Items",
+   "options": "Platform Order Item"
+  },
+  {
+   "fieldname": "unmatched_items",
+   "fieldtype": "Table",
+   "label": "Unmatched Items",
+   "options": "Platform Order Unmatched Item"
   },
   {
    "fieldname": "section_break_totals",
@@ -138,6 +190,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "delivery_note",
+   "fieldtype": "Link",
+   "label": "Delivery Note",
+   "options": "Delivery Note",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_tracking",
    "fieldtype": "Column Break"
   },
@@ -167,6 +226,7 @@
    "fieldtype": "Select",
    "label": "Series",
    "options": "PO-.YYYY.-.MM.-.DD.-.####",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -183,7 +243,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-01-03 12:00:00.000000",
+ "modified": "2026-01-03 13:42:27.021927",
  "modified_by": "Administrator",
  "module": "Electro Zone",
  "name": "Platform Order",
@@ -204,6 +264,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "platform_date",
  "sort_order": "DESC",
  "states": [],

@@ -6,60 +6,21 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "item_code",
-  "item_model",
-  "description",
-  "column_break_1",
-  "partner_sku",
   "asin_sku",
-  "section_break_2",
   "quantity",
   "unit_price",
   "total_price",
-  "stock_available"
+  "platform",
+  "row_number",
+  "notes"
  ],
  "fields": [
-  {
-   "fieldname": "item_code",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Item Code",
-   "options": "Item",
-   "reqd": 1
-  },
-  {
-   "fetch_from": "item_code.custom_item_model",
-   "fieldname": "item_model",
-   "fieldtype": "Data",
-   "label": "Item Model",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "item_code.description",
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "label": "Description",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_1",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "partner_sku",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Partner SKU"
-  },
   {
    "fieldname": "asin_sku",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Asin/Sku"
-  },
-  {
-   "fieldname": "section_break_2",
-   "fieldtype": "Section Break"
+   "label": "ASIN/SKU",
+   "reqd": 1
   },
   {
    "fieldname": "quantity",
@@ -83,10 +44,21 @@
    "read_only": 1
   },
   {
-   "fieldname": "stock_available",
-   "fieldtype": "Float",
-   "label": "Stock Available",
+   "fieldname": "platform",
+   "fieldtype": "Data",
+   "label": "Platform",
    "read_only": 1
+  },
+  {
+   "fieldname": "row_number",
+   "fieldtype": "Int",
+   "label": "Excel Row",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -95,7 +67,7 @@
  "modified": "2026-01-03 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Electro Zone",
- "name": "Platform Order Item",
+ "name": "Platform Order Unmatched Item",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",
