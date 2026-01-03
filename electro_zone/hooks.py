@@ -55,7 +55,8 @@ doctype_js = {
 }
 
 doctype_list_js = {
-	"Item": "public/js/item_list.js"
+	"Item": "public/js/item_list.js",
+	"Platform Order": "electro_zone/doctype/platform_order/platform_order_list.js"
 }
 
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -332,8 +333,5 @@ doc_events = {
 # --------
 # Export fixtures for this app
 
-fixtures = [
-	{"dt": "Custom Field", "filters": [["name", "in", ["Item-platform_asin_sku"]]]},
-	"Client Script",
-]
+# fixtures = ["Custom Field", "Property Setter", "Print Format", "Workflow", "Workflow State", "Workflow Action"]
 
