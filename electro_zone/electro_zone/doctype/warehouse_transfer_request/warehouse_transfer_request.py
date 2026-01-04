@@ -707,6 +707,30 @@ def get_accepted_qty(transfer_name, item_code):
 
 
 @frappe.whitelist()
+def get_item_by_barcode(barcode):
+	"""
+	API method to find item code by barcode
+	Runs with elevated permissions to bypass Stock User restrictions
+
+	Args:
+		barcode: Barcode string to search
+
+	Returns:
+		dict: {success: bool, item_code: str, error: str}
+	"""
+	if not barcode:
+		return {"success": False, "error": "Barcode is required"}
+
+	# Search for barcode in Item Barcode child table
+	result = frappe.db.get_value("Item Barcode", {"barcode": barcode}, "parent")
+
+	if result:
+		return {"success": True, "item_code": result}
+	else:
+		return {"success": False, "error": f"Barcode '{barcode}' not found"}
+
+
+@frappe.whitelist()
 def validate_items_for_upload(items, source_warehouse=None, target_warehouse=None):
 	"""
 	API method to validate items for bulk upload

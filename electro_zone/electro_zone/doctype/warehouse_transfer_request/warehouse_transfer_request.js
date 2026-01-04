@@ -1770,178 +1770,370 @@ function show_validation_errors(errors) {
 // ============================================================================
 
 frappe.ui.form.on("Warehouse Transfer Request", {
-  scan_barcode: function(frm) {
-    let scanned_barcode = (frm.doc.scan_barcode || '').trim();
+  custom_scan_barcode: function(frm) {
+    let scanned_barcode = (frm.doc.custom_scan_barcode || '').trim();
 
     if (!scanned_barcode) {
       return;
     }
 
     // Clear the barcode field immediately
-    frm.set_value('scan_barcode', '');
+    frm.set_value('custom_scan_barcode', '');
 
-    // Validation: Status must be "Approved - Pending Shipment"
-    if (frm.doc.approval_status !== "Approved - Pending Shipment") {
+    let status = frm.doc.approval_status;
+
+    // Determine which operation to perform based on status
+    let operation_mode = null;
+
+    if (status === "Draft") {
+      operation_mode = "add_item";
+    } else if (status === "Approved - Pending Shipment" || status === "Partially Shipped") {
+      operation_mode = "ship_item";
+    } else if (status === "Shipped" || status === "Partially Completed") {
+      operation_mode = "receive_item";
+    } else {
       frappe.show_alert({
-        message: __('⚠️ Can only scan in "Approved - Pending Shipment" status'),
+        message: __('⚠️ Barcode scanning not available in "{0}" status', [status]),
         indicator: 'yellow'
       }, 4);
       return;
     }
 
-    // Validation: Must have items
-    if (!frm.doc.items || frm.doc.items.length === 0) {
-      frappe.show_alert({
-        message: __('⚠️ No items in transfer request'),
-        indicator: 'yellow'
-      }, 4);
-      return;
+    // For add_item mode, check if warehouses are set
+    if (operation_mode === "add_item") {
+      if (!frm.doc.source_warehouse || !frm.doc.target_warehouse) {
+        frappe.show_alert({
+          message: __('⚠️ Please select Source and Target warehouses first'),
+          indicator: 'yellow'
+        }, 4);
+        return;
+      }
     }
 
-    // Fetch Item documents to get barcodes (avoids permission issues)
-    // Get all unique item codes from transfer
-    let item_codes = frm.doc.items.map(row => row.item_code);
-
-    // Fetch all items in parallel
-    let fetch_promises = item_codes.map(item_code => {
-      return new Promise((resolve, reject) => {
-        frappe.call({
-          method: 'frappe.client.get',
-          args: {
-            doctype: 'Item',
-            name: item_code
-          },
-          callback: function(r) {
-            if (r.message) {
-              resolve({
-                item_code: item_code,
-                barcodes: r.message.barcodes || []
-              });
-            } else {
-              resolve({
-                item_code: item_code,
-                barcodes: []
-              });
-            }
-          },
-          error: function(err) {
-            resolve({
-              item_code: item_code,
-              barcodes: []
-            });
-          }
-        });
-      });
-    });
-
-    // Wait for all items to be fetched
-    Promise.all(fetch_promises).then(items_with_barcodes => {
-      // Find which item has the scanned barcode
-      let matched_item = null;
-      for (let item of items_with_barcodes) {
-        for (let barcode_obj of item.barcodes) {
-          if (barcode_obj.barcode === scanned_barcode) {
-            matched_item = item;
-            break;
-          }
-        }
-        if (matched_item) break;
-      }
-
-      if (!matched_item) {
-        frappe.show_alert({
-          message: __('❌ Barcode not found: {0}', [scanned_barcode]),
-          indicator: 'red'
-        }, 5);
-        return;
-      }
-
-      // Find the corresponding row in transfer items table
-      let item_row = null;
-      let row_index = -1;
-
-      frm.doc.items.forEach(function(row, index) {
-        if (row.item_code === matched_item.item_code) {
-          item_row = row;
-          row_index = index;
-        }
-      });
-
-      if (!item_row) {
-        frappe.show_alert({
-          message: __('❌ Item {0} not in this transfer request', [matched_item.item_code]),
-          indicator: 'red'
-        }, 5);
-        return;
-      }
-
-      // Call Server API to get accepted_qty (bypasses permissions)
-      frappe.call({
-        method: 'electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.get_accepted_qty',
-        args: {
-          transfer_name: frm.doc.name,
-          item_code: item_row.item_code
-        },
-        callback: function(r) {
-          if (!r.message || !r.message.success) {
-            frappe.show_alert({
-              message: __('❌ {0}', [r.message ? r.message.error : 'Item not found in transfer request']),
-              indicator: 'red'
-            }, 5);
-            return;
-          }
-
-          let accepted_qty = r.message.accepted_qty;
-          let current_shipped = r.message.shipped_qty || 0;
-          let new_shipped = current_shipped + 1;
-
-          // Validate against accepted_qty
-          if (new_shipped > accepted_qty) {
-            frappe.show_alert({
-              message: __('❌ Max reached! {0} | Limit: {1}', [item_row.item_code, accepted_qty]),
-              indicator: 'red'
-            }, 5);
-            return;
-          }
-
-          // Increment shipped_qty by +1
-          frappe.model.set_value(item_row.doctype, item_row.name,
-            'shipped_qty', new_shipped);
-
-          // Show success message
+    // Search for item by barcode using server API (bypasses permissions)
+    frappe.call({
+      method: 'electro_zone.electro_zone.doctype.warehouse_transfer_request.warehouse_transfer_request.get_item_by_barcode',
+      args: {
+        barcode: scanned_barcode
+      },
+      callback: function(r) {
+        if (!r.message || !r.message.success) {
           frappe.show_alert({
-            message: __('✅ {0} --> +1 (total: {1}/{2})', [item_row.item_code, new_shipped, accepted_qty]),
-            indicator: 'green'
-          }, 3);
-
-          // Focus on shipped_qty field and scroll to it
-          setTimeout(() => {
-            let qty_field = $(`[data-name="${item_row.name}"] [data-fieldname="shipped_qty"] input`);
-
-            if (qty_field.length) {
-              qty_field.focus();
-              qty_field[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }, 100);
-
-          // Refresh grid to show updated quantity
-          frm.refresh_field('items');
-        },
-        error: function(err) {
-          frappe.show_alert({
-            message: __('❌ Server error: {0}', [err.message || 'Unknown error']),
+            message: __('❌ {0}', [r.message ? r.message.error : 'Barcode not found']),
             indicator: 'red'
           }, 5);
+          return;
         }
-      });
-    }).catch(err => {
-      frappe.show_alert({
-        message: __('❌ Error loading items: {0}', [err.message || 'Unknown error']),
-        indicator: 'red'
-      }, 5);
+
+        let item_code = r.message.item_code;
+
+        // Handle based on operation mode
+        if (operation_mode === "add_item") {
+          handle_add_item_by_barcode(frm, item_code, scanned_barcode);
+        } else if (operation_mode === "ship_item") {
+          handle_ship_item_by_barcode(frm, item_code, scanned_barcode);
+        } else if (operation_mode === "receive_item") {
+          handle_receive_item_by_barcode(frm, item_code, scanned_barcode);
+        }
+      },
+      error: function(err) {
+        frappe.show_alert({
+          message: __('❌ Error searching barcode: {0}', [err.message || 'Unknown error']),
+          indicator: 'red'
+        }, 5);
+      }
     });
   }
 });
+
+// ============================================================================
+// BARCODE HANDLER: Add Item (Draft status)
+// ============================================================================
+function handle_add_item_by_barcode(frm, item_code, barcode) {
+  // Check if item already exists in table
+  let existing_item = null;
+  frm.doc.items.forEach(function(row) {
+    if (row.item_code === item_code) {
+      existing_item = row;
+    }
+  });
+
+  if (existing_item) {
+    // Item exists: increment requested_qty by 1
+    let new_qty = (existing_item.requested_qty || 0) + 1;
+
+    // Check against available stock
+    if (existing_item.available_qty && new_qty > existing_item.available_qty) {
+      frappe.show_alert({
+        message: __('❌ Max stock reached! {0} | Available: {1}', [item_code, existing_item.available_qty]),
+        indicator: 'red'
+      }, 5);
+      return;
+    }
+
+    frappe.model.set_value(existing_item.doctype, existing_item.name, 'requested_qty', new_qty);
+
+    // Auto-update accepted_qty in Draft status
+    if (frm.doc.approval_status === "Draft") {
+      frappe.model.set_value(existing_item.doctype, existing_item.name, 'accepted_qty', new_qty);
+    }
+
+    frappe.show_alert({
+      message: __('✅ {0} --> +1 (total: {1})', [item_code, new_qty]),
+      indicator: 'green'
+    }, 3);
+
+    // Scroll to the row
+    setTimeout(() => {
+      let qty_field = $(`[data-name="${existing_item.name}"] [data-fieldname="requested_qty"] input`);
+      if (qty_field.length) {
+        qty_field[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+
+    frm.refresh_field('items');
+  } else {
+    // Item doesn't exist: add new row
+    // First fetch item details
+    frappe.call({
+      method: 'frappe.client.get',
+      args: {
+        doctype: 'Item',
+        name: item_code
+      },
+      callback: function(r) {
+        if (!r.message) {
+          frappe.show_alert({
+            message: __('❌ Item {0} not found', [item_code]),
+            indicator: 'red'
+          }, 5);
+          return;
+        }
+
+        let item = r.message;
+
+        // Check stock in source warehouse
+        frappe.call({
+          method: 'frappe.client.get_value',
+          args: {
+            doctype: 'Bin',
+            filters: {
+              item_code: item_code,
+              warehouse: frm.doc.source_warehouse
+            },
+            fieldname: 'actual_qty'
+          },
+          callback: function(bin_r) {
+            let available_qty = bin_r.message && bin_r.message.actual_qty ? bin_r.message.actual_qty : 0;
+
+            if (available_qty <= 0) {
+              frappe.show_alert({
+                message: __('❌ No stock available for {0} in {1}', [item_code, frm.doc.source_warehouse]),
+                indicator: 'red'
+              }, 5);
+              return;
+            }
+
+            // Fetch target warehouse stock
+            frappe.call({
+              method: 'frappe.client.get_value',
+              args: {
+                doctype: 'Bin',
+                filters: {
+                  item_code: item_code,
+                  warehouse: frm.doc.target_warehouse
+                },
+                fieldname: 'actual_qty'
+              },
+              callback: function(target_bin_r) {
+                let available_qty_target = target_bin_r.message && target_bin_r.message.actual_qty ? target_bin_r.message.actual_qty : 0;
+
+                // Add new row
+                let new_row = frm.add_child('items');
+                new_row.item_code = item_code;
+                new_row.item_name = item.item_name;
+                new_row.requested_qty = 1;
+                new_row.uom = item.stock_uom;
+                new_row.available_qty = available_qty;
+                new_row.available_qty_target = available_qty_target;
+                new_row.shipped_qty = 0;
+                new_row.received_qty = 0;
+
+                // Auto-set accepted_qty in Draft
+                if (frm.doc.approval_status === "Draft") {
+                  new_row.accepted_qty = 1;
+                }
+
+                frm.refresh_field('items');
+
+                frappe.show_alert({
+                  message: __('✅ Added {0} (qty: 1)', [item_code]),
+                  indicator: 'green'
+                }, 3);
+
+                // Scroll to the new row
+                setTimeout(() => {
+                  let qty_field = $(`[data-name="${new_row.name}"] [data-fieldname="requested_qty"] input`);
+                  if (qty_field.length) {
+                    qty_field[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }, 100);
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+}
+
+// ============================================================================
+// BARCODE HANDLER: Ship Item (Approved - Pending Shipment / Partially Shipped)
+// ============================================================================
+function handle_ship_item_by_barcode(frm, item_code, barcode) {
+  // Validation: Must have items
+  if (!frm.doc.items || frm.doc.items.length === 0) {
+    frappe.show_alert({
+      message: __('⚠️ No items in transfer request'),
+      indicator: 'yellow'
+    }, 4);
+    return;
+  }
+
+  // Find the corresponding row in transfer items table
+  let item_row = null;
+
+  frm.doc.items.forEach(function(row) {
+    if (row.item_code === item_code) {
+      item_row = row;
+    }
+  });
+
+  if (!item_row) {
+    frappe.show_alert({
+      message: __('❌ Item {0} not in this transfer request', [item_code]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  // Check if item has accepted_qty > 0 (not excluded)
+  if ((item_row.accepted_qty || 0) === 0) {
+    frappe.show_alert({
+      message: __('❌ Item {0} was excluded (accepted_qty = 0)', [item_code]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  let current_shipped = item_row.shipped_qty || 0;
+  let accepted_qty = item_row.accepted_qty || 0;
+  let new_shipped = current_shipped + 1;
+
+  // Validate against accepted_qty
+  if (new_shipped > accepted_qty) {
+    frappe.show_alert({
+      message: __('❌ Max reached! {0} | Limit: {1}', [item_code, accepted_qty]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  // Increment shipped_qty by +1
+  frappe.model.set_value(item_row.doctype, item_row.name, 'shipped_qty', new_shipped);
+
+  // Show success message
+  frappe.show_alert({
+    message: __('✅ Shipped {0} --> +1 (total: {1}/{2})', [item_code, new_shipped, accepted_qty]),
+    indicator: 'green'
+  }, 3);
+
+  // Focus on shipped_qty field and scroll to it
+  setTimeout(() => {
+    let qty_field = $(`[data-name="${item_row.name}"] [data-fieldname="shipped_qty"] input`);
+    if (qty_field.length) {
+      qty_field.focus();
+      qty_field[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 100);
+
+  // Refresh grid to show updated quantity
+  frm.refresh_field('items');
+}
+
+// ============================================================================
+// BARCODE HANDLER: Receive Item (Shipped / Partially Completed)
+// ============================================================================
+function handle_receive_item_by_barcode(frm, item_code, barcode) {
+  // Validation: Must have items
+  if (!frm.doc.items || frm.doc.items.length === 0) {
+    frappe.show_alert({
+      message: __('⚠️ No items in transfer request'),
+      indicator: 'yellow'
+    }, 4);
+    return;
+  }
+
+  // Find the corresponding row in transfer items table
+  let item_row = null;
+
+  frm.doc.items.forEach(function(row) {
+    if (row.item_code === item_code) {
+      item_row = row;
+    }
+  });
+
+  if (!item_row) {
+    frappe.show_alert({
+      message: __('❌ Item {0} not in this transfer request', [item_code]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  // Check if item has been shipped
+  let shipped_qty = item_row.shipped_qty || 0;
+  if (shipped_qty === 0) {
+    frappe.show_alert({
+      message: __('❌ Item {0} has not been shipped yet', [item_code]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  let current_received = item_row.received_qty || 0;
+  let new_received = current_received + 1;
+
+  // Validate against shipped_qty
+  if (new_received > shipped_qty) {
+    frappe.show_alert({
+      message: __('❌ Max reached! {0} | Shipped: {1}', [item_code, shipped_qty]),
+      indicator: 'red'
+    }, 5);
+    return;
+  }
+
+  // Increment received_qty by +1
+  frappe.model.set_value(item_row.doctype, item_row.name, 'received_qty', new_received);
+
+  // Show success message
+  frappe.show_alert({
+    message: __('✅ Received {0} --> +1 (total: {1}/{2})', [item_code, new_received, shipped_qty]),
+    indicator: 'green'
+  }, 3);
+
+  // Focus on received_qty field and scroll to it
+  setTimeout(() => {
+    let qty_field = $(`[data-name="${item_row.name}"] [data-fieldname="received_qty"] input`);
+    if (qty_field.length) {
+      qty_field.focus();
+      qty_field[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 100);
+
+  // Refresh grid to show updated quantity
+  frm.refresh_field('items');
+}
 
 // ============================================================================
 // END OF BARCODE SCANNING CODE
