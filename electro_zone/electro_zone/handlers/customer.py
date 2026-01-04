@@ -150,9 +150,9 @@ def recalculate_customer_balance(customer=None):
 
 
 def validate_phone_uniqueness(doc, _method=None):
-	"""Validate that the phone number on primary address is unique across all customers.
+	"""Validate that the phone number on primary address is unique across all customers (if provided).
 
-	Ensures no two customers can have the same phone number.
+	Primary address and phone are now OPTIONAL. Validation only runs if primary address is set.
 
 	Event: Before Save
 
@@ -161,27 +161,21 @@ def validate_phone_uniqueness(doc, _method=None):
 		_method: Event method name (unused, required by Frappe hook signature)
 
 	Raises:
-		frappe.ValidationError: If duplicate phone found or validation fails
+		frappe.ValidationError: If duplicate phone found
 	"""
-	# STEP 1: Validate customer has a primary address
+	# STEP 1: Check if customer has a primary address (OPTIONAL)
 	primary_address = doc.get("customer_primary_address")
 
 	if not primary_address:
-		frappe.throw(
-			"Customer must have a Primary Address.<br><br>"
-			"Please create an Address and link it as the Primary Address for this customer.",
-			title="Primary Address Required",
-		)
+		# Primary address is optional - skip validation
+		return
 
-	# STEP 2: Get phone from the linked Address
+	# STEP 2: Get phone from the linked Address (OPTIONAL)
 	phone = frappe.db.get_value("Address", primary_address, "phone")
 
 	if not phone:
-		frappe.throw(
-			f"The Primary Address ({primary_address}) does not have a phone number.<br><br>"
-			"Please add a phone number to the Address before saving this customer.",
-			title="Phone Number Required on Address",
-		)
+		# Phone is optional - skip validation
+		return
 
 	# STEP 3: Remove spaces and formatting for consistent comparison
 	phone_clean = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")

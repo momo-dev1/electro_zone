@@ -15,6 +15,10 @@ class PlatformOrder(Document):
         if not self.rep_name:
             self.rep_name = frappe.session.user
 
+        # Auto-create/link customer based on platform
+        if self.platform:
+            self.customer = get_or_create_platform_customer(self.platform)
+
         # Calculate totals
         self.calculate_totals()
 
@@ -406,6 +410,35 @@ def get_hold_warehouse():
         return hold_wh.name
     except Exception:
         frappe.throw(_("Hold warehouse not found. Please create a 'Hold' warehouse first."))
+
+
+def get_or_create_platform_customer(platform):
+    """
+    Link to existing customer for the platform
+    Each platform (Amazon, Noon, Jumia, Other) must have a customer with the same name
+
+    Args:
+        platform: Platform name (Amazon, Noon, Jumia, Other)
+
+    Returns:
+        str: Customer name
+
+    Raises:
+        ValidationError: If customer doesn't exist for the platform
+    """
+    if not platform:
+        return None
+
+    # Check if customer exists with platform name
+    customer_name = platform
+    if frappe.db.exists("Customer", customer_name):
+        return customer_name
+
+    # Customer doesn't exist - throw error
+    frappe.throw(
+        _("Customer '{0}' does not exist. Please create a customer with name '{0}' first.").format(platform),
+        title=_("Customer Not Found")
+    )
 
 
 @frappe.whitelist()
@@ -891,6 +924,16 @@ def bulk_import_platform_orders_from_excel(data):
                 if not order_data["platform_date"]:
                     results["failed"].append(
                         {"order_number": order_data["order_number"], "error": "Missing Platform Date"}
+                    )
+                    continue
+
+                # Check if customer exists for this platform
+                if not frappe.db.exists("Customer", order_data["platform"]):
+                    results["failed"].append(
+                        {
+                            "order_number": order_data["order_number"],
+                            "error": f"Customer '{order_data['platform']}' does not exist. Please create it first."
+                        }
                     )
                     continue
 

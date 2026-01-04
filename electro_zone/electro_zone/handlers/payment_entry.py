@@ -70,9 +70,6 @@ def balance_topup_and_refund_handler(doc, method=None):
 		frappe.log_error(f"No customer found on Payment Entry {doc.name}", "Customer Balance Error")
 		return
 
-	# Validate customer has primary address with phone
-	_validate_customer_address_phone(customer)
-
 	# Check if already processed (prevent duplicates)
 	if _is_ledger_entry_exists(doc.name, customer):
 		frappe.log_error(
@@ -345,34 +342,6 @@ def _show_allocation_message(
 # ============================================================================
 # HELPER FUNCTIONS - Balance Management
 # ============================================================================
-
-
-def _validate_customer_address_phone(customer: str) -> None:
-	"""Validate customer has primary address with phone number.
-
-	Args:
-		customer: Customer name
-
-	Raises:
-		frappe.ValidationError: If validation fails
-	"""
-	primary_address = frappe.db.get_value("Customer", customer, "customer_primary_address")
-
-	if not primary_address:
-		frappe.throw(
-			f"Customer {customer} does not have a primary address. "
-			"Please set primary address in Customer master before creating payments.",
-			title="Primary Address Required",
-		)
-
-	phone = frappe.db.get_value("Address", primary_address, "phone")
-
-	if not phone:
-		frappe.throw(
-			f"Primary address for customer {customer} does not have a phone number. "
-			"Please add phone to address before creating payments.",
-			title="Phone Number Required",
-		)
 
 
 def _is_ledger_entry_exists(pe_name: str, customer: str) -> bool:
