@@ -40,7 +40,7 @@ def reserve_balance_for_so(customer, so_name, amount):
 	if amount <= 0:
 		return {"success": False, "message": "Amount must be positive"}
 
-	frappe.db.begin()
+	
 
 	try:
 		# Lock customer record
@@ -61,7 +61,7 @@ def reserve_balance_for_so(customer, so_name, amount):
 		available = current_balance - reserved_balance
 
 		if available <= 0:
-			frappe.db.rollback()
+			
 			return {"success": False, "message": "No available balance to reserve", "available_balance": 0}
 
 		# Reserve the amount (or partial if insufficient)
@@ -91,7 +91,7 @@ def reserve_balance_for_so(customer, so_name, amount):
 		}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(f"Failed to reserve balance for SO {so_name}: {str(e)}", "Balance Reservation Error")
 		raise
 
@@ -106,7 +106,7 @@ def release_reserved_balance(customer, so_name):
 	Returns:
 		dict: Result with success status and new balances
 	"""
-	frappe.db.begin()
+	
 
 	try:
 		# Get SO reserved amount
@@ -148,7 +148,7 @@ def release_reserved_balance(customer, so_name):
 		return {"success": True, "released_amount": so_reserved, "new_reserved_balance": new_reserved_balance}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(f"Failed to release reserved balance for SO {so_name}: {str(e)}", "Balance Release Error")
 		raise
 
@@ -172,7 +172,7 @@ def consume_balance_for_invoice(customer, si_name, amount):
 	if amount <= 0:
 		return {"success": False, "message": "Amount must be positive"}
 
-	frappe.db.begin()
+	
 
 	try:
 		# Lock customer record
@@ -246,7 +246,7 @@ def consume_balance_for_invoice(customer, si_name, amount):
 		}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(f"Failed to consume balance for SI {si_name}: {str(e)}", "Balance Consumption Error")
 		raise
 
@@ -265,7 +265,7 @@ def increase_balance_for_credit_note(customer, cn_name, amount):
 	if amount <= 0:
 		return {"success": False, "message": "Amount must be positive"}
 
-	frappe.db.begin()
+	
 
 	try:
 		# Lock customer record
@@ -300,7 +300,7 @@ def increase_balance_for_credit_note(customer, cn_name, amount):
 		return {"success": True, "increased_amount": amount, "new_balance": new_balance, "previous_balance": current_balance}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(f"Failed to increase balance for Credit Note {cn_name}: {str(e)}", "Credit Note Balance Error")
 		raise
 
@@ -321,7 +321,7 @@ def update_balance(customer, amount, description, reference_doctype, reference_n
 	Returns:
 		dict: Result with success status and new balance
 	"""
-	frappe.db.begin()
+	
 
 	try:
 		# Lock customer record
@@ -360,7 +360,7 @@ def update_balance(customer, amount, description, reference_doctype, reference_n
 		return {"success": True, "amount": amount, "new_balance": new_balance, "previous_balance": current_balance}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(f"Failed to update balance for {customer}: {str(e)}", "Balance Update Error")
 		raise
 
@@ -378,7 +378,7 @@ def reverse_balance_update(customer, reference_doctype, reference_name):
 	Returns:
 		dict: Result with success status and new balance
 	"""
-	frappe.db.begin()
+	
 
 	try:
 		# Find original ledger entry
@@ -435,7 +435,7 @@ def reverse_balance_update(customer, reference_doctype, reference_name):
 		}
 
 	except Exception as e:
-		frappe.db.rollback()
+		
 		frappe.log_error(
 			f"Failed to reverse balance update for {reference_doctype} {reference_name}: {str(e)}",
 			"Balance Reversal Error",
