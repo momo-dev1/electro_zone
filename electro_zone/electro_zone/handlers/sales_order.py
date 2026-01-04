@@ -304,60 +304,77 @@ def move_to_hold(doc, method=None):
 
 
 def deduct_balance(doc, method=None):
-	"""Create reference-only ledger entry for Sales Order submission.
-
-	Balance is now tracked in GL Entry. This creates an audit trail entry only.
+	"""Reserve balance from custom_current_balance for Sales Order.
 
 	Args:
 		doc: Sales Order document
 		method: Event method name (unused, required by Frappe hook signature)
 	"""
+	from .customer_balance_manager import reserve_balance_for_so, get_available_balance
+
 	customer = doc.customer
 	so_total = doc.grand_total
 
-	# Get current balance from GL (for display only)
-	current_balance = frappe.db.get_value("Customer", customer, "custom_current_balance") or 0.0
+	# Check available balance
+	available_balance = get_available_balance(customer)
 
-	# Create REFERENCE-ONLY Customer Balance Ledger entry
-	ledger = frappe.new_doc("Customer Balance Ledger")
-	ledger.transaction_date = doc.transaction_date
-	ledger.posting_time = frappe.utils.nowtime()
-	ledger.customer = customer
-	ledger.customer_name = doc.customer_name
-	ledger.reference_doctype = "Sales Order"
-	ledger.reference_document = doc.name
-	ledger.reference_date = doc.transaction_date
-	ledger.debit_amount = 0.0  # Reference only
-	ledger.credit_amount = 0.0  # Reference only
-	ledger.balance_before = current_balance
-	ledger.running_balance = current_balance  # Unchanged
-	ledger.remarks = f"Reference only - GL tracked. SO {doc.name} submitted (Amount: {frappe.format_value(so_total, {'fieldtype': 'Currency'})})"
-	ledger.company = doc.company
-	ledger.created_by = frappe.session.user
-	ledger.insert(ignore_permissions=True)
+	if available_balance > 0:
+		# Reserve the amount (or partial if insufficient)
+		reserved_amount = min(available_balance, so_total)
 
-	# Show notification
-	frappe.msgprint(
-		f"Sales Order created. Balance tracked in GL.<br>"
-		f"Current balance: <b>{frappe.format_value(current_balance, {'fieldtype': 'Currency'})}</b>",
-		indicator="blue",
-		title="SO Submitted",
-	)
+		# Atomic operation: reserve balance and update SO
+		result = reserve_balance_for_so(customer, doc.name, reserved_amount)
+
+		if result.get("success"):
+			# Update SO advance_paid to reflect reserved amount
+			frappe.db.set_value("Sales Order", doc.name, "advance_paid", reserved_amount, update_modified=False)
+
+			# Track reserved amount in custom field
+			frappe.db.set_value("Sales Order", doc.name, "custom_balance_reserved", reserved_amount, update_modified=False)
+
+			# Show message
+			frappe.msgprint(
+				f"Reserved {frappe.format_value(reserved_amount, {'fieldtype': 'Currency'})} from customer balance.<br>"
+				f"Remaining available balance: <b>{frappe.format_value(result['available_balance'], {'fieldtype': 'Currency'})}</b>",
+				indicator="green",
+				title="Balance Reserved",
+			)
+		else:
+			# Reservation failed
+			frappe.msgprint(f"Failed to reserve balance: {result.get('message', 'Unknown error')}", indicator="orange")
+	else:
+		# No balance to reserve
+		frappe.msgprint("Customer has no available balance. Order created as unpaid.", indicator="blue", title="No Balance to Reserve")
 
 
 def cancel_and_return_stock(doc, method=None):
 	"""Cancel Pending Dispatch DNs, return stock to source, and restore balance.
 
 	Workflow:
-	1. Auto-cancel Delivery Notes in Pending Dispatch state
-	2. Create Stock Entry to return stock from Hold to source warehouse
-	3. Restore customer balance (reverse the deduction from Submit)
+	1. Release reserved balance FIRST
+	2. Auto-cancel Delivery Notes in Pending Dispatch state
+	3. Create Stock Entry to return stock from Hold to source warehouse
 
 	Args:
 		doc: Sales Order document
 		method: Event method name (unused, required by Frappe hook signature)
 	"""
-	# Auto-cancel draft Delivery Notes linked to this SO
+	from .customer_balance_manager import release_reserved_balance
+
+	# STEP 1: Release reserved balance FIRST
+	try:
+		result = release_reserved_balance(doc.customer, doc.name)
+		if result.get("success") and result.get("released_amount", 0) > 0:
+			frappe.msgprint(
+				f"Released {frappe.format_value(result['released_amount'], {'fieldtype': 'Currency'})} reserved balance.",
+				indicator="green",
+				title="Balance Released",
+			)
+	except Exception as e:
+		frappe.log_error(f"Failed to release reserved balance for SO {doc.name}: {str(e)}", "Balance Release Error")
+		frappe.msgprint(f"Warning: Failed to release reserved balance: {str(e)}", indicator="orange")
+
+	# STEP 2: Auto-cancel draft Delivery Notes linked to this SO
 	dn_items = frappe.db.get_all(
 		"Delivery Note Item", filters={"against_sales_order": doc.name}, fields=["parent"], distinct=True
 	)
