@@ -48,7 +48,7 @@ function render_listings_table(frm, listings) {
 	const $wrapper = frm.fields_dict.custom_marketplace_listings_tab.$wrapper;
 
 	// Collect all URLs for "Open All Links" functionality
-	const all_urls = listings.filter(l => l.listing_url).map(l => l.listing_url);
+	const all_urls = listings.filter((l) => l.listing_url).map((l) => l.listing_url);
 	const has_urls = all_urls.length > 0;
 
 	let html = `
@@ -56,14 +56,18 @@ function render_listings_table(frm, listings) {
             <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
                 <h5 style="margin: 0;">Latest Marketplace Listings</h5>
                 <div>
-                    ${has_urls ? `
+                    ${
+						has_urls
+							? `
                     <button class="btn btn-sm btn-default open-all-links-btn" style="margin-right: 10px;">
                         <i class="fa fa-external-link"></i> Open All Links
                     </button>
-                    ` : ''}
+                    `
+							: ""
+					}
                     <button class="btn btn-sm btn-primary" onclick="create_new_marketplace_listing('${
-					frm.doc.name
-				}', '${frm.doc.item_name || ""}')">
+						frm.doc.name
+					}', '${frm.doc.item_name || ""}')">
                         <i class="fa fa-plus"></i> Create New Marketplace Listing
                     </button>
                 </div>
@@ -79,20 +83,21 @@ function render_listings_table(frm, listings) {
         `;
 	} else {
 		html += `
-            <table class="table table-bordered table-hover" style="margin: 0;">
-                <thead style="background-color: #f5f7fa;">
-                    <tr>
-                        <th style="width: 14%;">Platform</th>
-                        <th style="width: 18%;">ASIN / SKU</th>
-                        <th style="width: 13%;">Commission</th>
-                        <th style="width: 11%;">Shipping Fee</th>
-                        <th style="width: 9%;">Status</th>
-                        <th style="width: 12%;">Effective Date</th>
-                        <th style="width: 8%;">Link</th>
-                        <th style="width: 15%;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div style="overflow-x: auto; margin-bottom: 10px;">
+                <table class="table table-bordered table-hover" style="margin: 0; min-width: 900px;">
+                    <thead style="background-color: #f5f7fa;">
+                        <tr>
+                            <th style="width: 13%;">Platform</th>
+                            <th style="width: 15%;">ASIN / SKU</th>
+                            <th style="width: 15%;">Partner ASIN/SKU</th>
+                            <th style="width: 11%;">Commission</th>
+                            <th style="width: 12%;">Shipping Fee</th>
+                            <th style="width: 12%;">Effective Date</th>
+                            <th style="width: 8%;">Link</th>
+                            <th style="width: 14%;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
 		listings.forEach((listing) => {
 			const commission_display = listing.commission
@@ -101,20 +106,14 @@ function render_listings_table(frm, listings) {
 			const shipping_display = listing.shipping_fee
 				? frappe.format(listing.shipping_fee, { fieldtype: "Currency" })
 				: "-";
-			const status_color =
-				listing.status === "Active"
-					? "green"
-					: listing.status === "Inactive"
-					? "red"
-					: "orange";
 
 			html += `
                 <tr>
                     <td><strong>${listing.platform}</strong></td>
                     <td style="font-family: monospace;">${listing.asin}</td>
+                    <td style="font-family: monospace;">${listing.partner_asin_sku || "-"}</td>
                     <td>${commission_display}</td>
                     <td>${shipping_display}</td>
-                    <td><span class="indicator-pill ${status_color}">${listing.status}</span></td>
                     <td>${frappe.datetime.str_to_user(listing.effective_date)}</td>
                     <td style="text-align: center;">
             `;
@@ -132,9 +131,7 @@ function render_listings_table(frm, listings) {
 			html += `
                     </td>
                     <td>
-                        <button class="btn btn-xs btn-default" onclick="view_marketplace_listing('${
-							listing.listing_name
-						}')">
+                        <button class="btn btn-xs btn-default" onclick="view_marketplace_listing('${listing.listing_name}')">
                             <i class="fa fa-eye"></i> View
                         </button>
                     </td>
@@ -145,6 +142,7 @@ function render_listings_table(frm, listings) {
 		html += `
                 </tbody>
             </table>
+            </div>
             <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
                 <i class="fa fa-info-circle"></i> Showing ${listings.length} latest listing(s).
                 If multiple listings exist for the same Platform+ASIN, only the most recent is displayed.
@@ -158,7 +156,7 @@ function render_listings_table(frm, listings) {
 
 	// Attach event handler for "Open All Links" button
 	if (has_urls) {
-		$wrapper.find('.open-all-links-btn').on('click', function() {
+		$wrapper.find(".open-all-links-btn").on("click", function () {
 			open_all_marketplace_links(all_urls);
 		});
 	}

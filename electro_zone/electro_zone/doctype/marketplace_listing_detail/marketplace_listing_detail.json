@@ -8,6 +8,7 @@
  "field_order": [
   "section_break_kh6a",
   "platform",
+  "partner_asin_sku",
   "asin",
   "commission",
   "shipping_fee",
@@ -48,13 +49,19 @@
    "fieldname": "listing_url",
    "fieldtype": "Small Text",
    "label": "Listing URL"
+  },
+  {
+   "fieldname": "partner_asin_sku",
+   "fieldtype": "Data",
+   "label": "Partner ASIN / SKU",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-01-04 15:34:31.418951",
+ "modified": "2026-01-05 10:57:33.297118",
  "modified_by": "Administrator",
  "module": "Electro Zone",
  "name": "Marketplace Listing Detail",
