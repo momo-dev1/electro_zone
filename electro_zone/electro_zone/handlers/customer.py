@@ -63,24 +63,25 @@ def sync_balance_from_gl(customer=None, company=None):
 				error_customers.append(cust_name)
 				continue
 
+			# DISABLED: custom_current_balance functionality
 			# Get GL outstanding from ERPNext
-			gl_outstanding = get_customer_outstanding(
-				customer=cust_name,
-				company=customer_company,
-				ignore_outstanding_sales_order=False,  # Include unbilled SO
-			)
+			# gl_outstanding = get_customer_outstanding(
+			# 	customer=cust_name,
+			# 	company=customer_company,
+			# 	ignore_outstanding_sales_order=False,  # Include unbilled SO
+			# )
 
 			# Convert sign: ERPNext GL (positive = customer owes) → Custom (negative = customer owes)
-			custom_current_balance = -1 * gl_outstanding
+			# custom_current_balance = -1 * gl_outstanding
 
 			# Update customer balance field
-			frappe.db.set_value(
-				"Customer",
-				cust_name,
-				"custom_current_balance",
-				custom_current_balance,
-				update_modified=False,
-			)
+			# frappe.db.set_value(
+			# 	"Customer",
+			# 	cust_name,
+			# 	"custom_current_balance",
+			# 	custom_current_balance,
+			# 	update_modified=False,
+			# )
 
 			updated_count += 1
 
@@ -91,19 +92,20 @@ def sync_balance_from_gl(customer=None, company=None):
 				f"GL balance sync failed for customer {cust_name}: {str(e)}", "GL Balance Sync Error"
 			)
 
+	# DISABLED: custom_current_balance functionality
 	# Get final balance for single customer sync (for display)
 	final_balance = None
 	gl_balance = None
-	if customer and updated_count == 1:
-		final_balance = frappe.db.get_value("Customer", customer, "custom_current_balance")
-		# Get GL balance for display
-		try:
-			company_for_display = company or frappe.defaults.get_user_default("Company")
-			if not company_for_display:
-				company_for_display = frappe.db.get_value("Company", filters={}, fieldname="name")
-			gl_balance = get_customer_outstanding(customer=customer, company=company_for_display, ignore_outstanding_sales_order=False)
-		except:
-			pass
+	# if customer and updated_count == 1:
+	# 	final_balance = frappe.db.get_value("Customer", customer, "custom_current_balance")
+	# 	# Get GL balance for display
+	# 	try:
+	# 		company_for_display = company or frappe.defaults.get_user_default("Company")
+	# 		if not company_for_display:
+	# 			company_for_display = frappe.db.get_value("Company", filters={}, fieldname="name")
+	# 		gl_balance = get_customer_outstanding(customer=customer, company=company_for_display, ignore_outstanding_sales_order=False)
+	# 	except:
+	# 		pass
 
 	# Prepare response
 	if error_count > 0:
