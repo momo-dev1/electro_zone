@@ -5,9 +5,8 @@
             "fieldtype": "Link",
             "label": "Platform Order",
             "options": "Platform Order",
-            "insert_after": "customer",
-            "read_only": 1,
-            "description": "Source platform order"
+            "insert_after": "posting_date",
+            "read_only": 1
         }
     ]
 }

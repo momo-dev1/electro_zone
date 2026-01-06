@@ -3,6 +3,13 @@
 
 frappe.ui.form.on("Platform Order", {
     refresh: function (frm) {
+        // Show Sales Invoice link if available
+        if (frm.doc.sales_invoice) {
+            frm.add_custom_button(__("View Sales Invoice"), function () {
+                frappe.set_route("Form", "Sales Invoice", frm.doc.sales_invoice);
+            }, __("View"));
+        }
+
         // Mark as Ready to Ship button - show when Pending and not submitted
         if (frm.doc.delivery_status === "Pending" && frm.doc.docstatus === 0 && frm.doc.items && frm.doc.items.length > 0) {
             frm.add_custom_button(__("Mark as Ready to Ship"), function () {
@@ -31,7 +38,7 @@ frappe.ui.form.on("Platform Order", {
         if (frm.doc.delivery_status === "Ready to Ship" && frm.doc.docstatus === 1) {
             frm.add_custom_button(__("Mark as Shipped"), function () {
                 frappe.confirm(
-                    __("This will issue items from Hold Warehouse and create a Delivery Note. Continue?"),
+                    __("This will create Sales Invoice and deduct stock from Hold Warehouse. Continue?"),
                     function () {
                         frappe.call({
                             method: "electro_zone.electro_zone.doctype.platform_order.platform_order.mark_shipped",
@@ -39,7 +46,7 @@ frappe.ui.form.on("Platform Order", {
                                 platform_order_name: frm.doc.name,
                             },
                             freeze: true,
-                            freeze_message: __("Creating Stock Entry and Delivery Note..."),
+                            freeze_message: __("Creating Sales Invoice..."),
                             callback: function (r) {
                                 if (r.message && r.message.success) {
                                     frm.reload_doc();

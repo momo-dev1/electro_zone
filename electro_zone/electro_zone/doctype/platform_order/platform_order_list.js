@@ -155,7 +155,7 @@ function show_bulk_import_dialog(listview) {
 				label: __("Excel File"),
 				reqd: 1,
 				description: __(
-					"Upload Excel file with columns: Platform, Platform Date, Order Number, Asin/Sku, Quantity, Unit Price, Total Price"
+					"<div>Upload Excel file with columns: Platform, Platform Date, Order Number, Asin/Sku, Quantity, Unit Price, Total Price</div>"
 				),
 				onchange: function () {
 					let file_url = d.get_value("excel_file");
@@ -222,6 +222,8 @@ function show_bulk_import_dialog(listview) {
 }
 
 function process_bulk_excel_file(file_url, dialog) {
+	frappe.show_alert(__("Processing Excel file..."), 5);
+
 	fetch(file_url)
 		.then((response) => response.arrayBuffer())
 		.then((data) => {
@@ -233,12 +235,30 @@ function process_bulk_excel_file(file_url, dialog) {
 			}
 
 			const workbook = XLSX.read(data, { type: "array" });
-			const first_sheet = workbook.Sheets[workbook.SheetNames[0]];
-			const json_data = XLSX.utils.sheet_to_json(first_sheet);
 
-			dialog.excel_data = json_data;
+			// Process ALL sheets instead of just first one
+			const sheets_data = [];
 
-			show_bulk_preview(json_data, dialog);
+			workbook.SheetNames.forEach((sheet_name) => {
+				const sheet = workbook.Sheets[sheet_name];
+				const json_data = XLSX.utils.sheet_to_json(sheet);
+
+				// Only include sheets with data
+				if (json_data && json_data.length > 0) {
+					sheets_data.push({
+						sheet_name: sheet_name,
+						data: json_data,
+					});
+				}
+			});
+
+			if (sheets_data.length === 0) {
+				frappe.msgprint(__("No data found in any sheet"));
+				return;
+			}
+
+			// Show preview with all sheets
+			show_multi_sheet_preview(sheets_data, dialog);
 		})
 		.catch((error) => {
 			frappe.msgprint({
@@ -310,6 +330,196 @@ function show_bulk_preview(data, dialog) {
     `;
 
 	dialog.fields_dict.preview_html.$wrapper.html(html);
+}
+
+function show_multi_sheet_preview(sheets_data, dialog) {
+	// Calculate totals across all sheets
+	let total_rows = 0;
+	let sheets_summary = [];
+
+	sheets_data.forEach((sheet_info) => {
+		total_rows += sheet_info.data.length;
+
+		// Detect platform from columns (preview only)
+		const first_row = sheet_info.data[0];
+		const columns = Object.keys(first_row);
+		let detected_platform = "Unknown";
+
+		// Simple detection logic (matches backend)
+		if (columns.includes("amazon-order-id")) detected_platform = "Amazon";
+		else if (columns.includes("order_nr")) detected_platform = "Noon";
+		else if (columns.includes("Sku") && columns.includes("Order Number"))
+			detected_platform = "Jumia";
+		else if (columns.includes("itemid") && columns.includes("itemSku"))
+			detected_platform = "Homzmart";
+
+		sheets_summary.push({
+			sheet_name: sheet_info.sheet_name,
+			platform: detected_platform,
+			rows: sheet_info.data.length,
+		});
+	});
+
+	// Build summary HTML
+	let summary_html = `
+		<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+			<h4 style="margin: 0 0 10px 0;">Import Summary</h4>
+			<p><strong>Total Sheets:</strong> ${sheets_data.length}</p>
+			<p><strong>Total Rows:</strong> ${total_rows}</p>
+			<table class="table table-sm" style="margin-top: 10px;">
+				<thead>
+					<tr>
+						<th>Sheet Name</th>
+						<th>Detected Platform</th>
+						<th>Rows</th>
+					</tr>
+				</thead>
+				<tbody>
+	`;
+
+	sheets_summary.forEach((sheet) => {
+		const platform_color = sheet.platform === "Unknown" ? "text-danger" : "text-success";
+		summary_html += `
+			<tr>
+				<td>${sheet.sheet_name}</td>
+				<td class="${platform_color}"><strong>${sheet.platform}</strong></td>
+				<td>${sheet.rows}</td>
+			</tr>
+		`;
+	});
+
+	summary_html += `
+				</tbody>
+			</table>
+		</div>
+	`;
+
+	// Show preview with first 5 rows from first sheet
+	const preview_data = sheets_data[0].data.slice(0, 5);
+	const preview_html = build_preview_table(preview_data);
+
+	// Update dialog
+	dialog.fields_dict.preview_html.$wrapper.html(summary_html + preview_html);
+	dialog.set_primary_action(__("Import All Sheets"), function () {
+		import_multi_sheet_data(sheets_data, dialog);
+	});
+
+	// Store sheets data for later use
+	dialog.sheets_data = sheets_data;
+}
+
+function build_preview_table(data) {
+	if (!data || data.length === 0) {
+		return '<p class="text-muted">No preview data available</p>';
+	}
+
+	let html = `
+		<div style="margin-top: 15px;">
+			<h5>Preview (First 5 rows from first sheet)</h5>
+			<div style="max-height: 300px; overflow-y: auto;">
+				<table class="table table-sm table-bordered mb-0">
+					<thead>
+						<tr>
+							<th>Row</th>
+	`;
+
+	// Get column headers from first row
+	const first_row = data[0];
+	const columns = Object.keys(first_row).slice(0, 6); // Show first 6 columns
+
+	columns.forEach((col) => {
+		html += `<th>${col}</th>`;
+	});
+
+	html += `
+						</tr>
+					</thead>
+					<tbody>
+	`;
+
+	data.forEach((row, idx) => {
+		html += `<tr><td>${idx + 2}</td>`;
+		columns.forEach((col) => {
+			html += `<td>${row[col] || ""}</td>`;
+		});
+		html += `</tr>`;
+	});
+
+	html += `
+					</tbody>
+				</table>
+			</div>
+		</div>
+	`;
+
+	return html;
+}
+
+function import_multi_sheet_data(sheets_data, dialog) {
+	dialog.hide();
+
+	frappe.call({
+		method: "electro_zone.electro_zone.doctype.platform_order.platform_order.process_multi_sheet_excel",
+		args: {
+			sheets_data: JSON.stringify(sheets_data),
+		},
+		freeze: true,
+		freeze_message: __("Importing orders from all sheets..."),
+		callback: function (r) {
+			if (r.message) {
+				const results = r.message;
+
+				// Build result message
+				let msg = `
+					<div>
+						<h4>Import Complete</h4>
+						<p><strong>Sheets Processed:</strong> ${results.sheets_processed}</p>
+						<p><strong>Sheets Skipped:</strong> ${results.sheets_skipped}</p>
+						<p><strong>Total Orders Created:</strong> ${results.total_orders_created}</p>
+					</div>
+				`;
+
+				if (results.sheet_results && results.sheet_results.length > 0) {
+					msg += "<h5>Details by Sheet:</h5><ul>";
+					results.sheet_results.forEach((sheet_result) => {
+						msg += `
+							<li>
+								<strong>${sheet_result.sheet_name}</strong> (${sheet_result.platform}):
+								${sheet_result.orders_created} created,
+								${sheet_result.orders_failed} failed
+							</li>
+						`;
+					});
+					msg += "</ul>";
+				}
+
+				if (results.warnings && results.warnings.length > 0) {
+					msg += '<h5 style="color: orange;">Warnings:</h5><ul>';
+					results.warnings.forEach((warning) => {
+						msg += `<li>${warning.sheet}: ${warning.message}</li>`;
+					});
+					msg += "</ul>";
+				}
+
+				if (results.errors && results.errors.length > 0) {
+					msg += '<h5 style="color: red;">Errors:</h5><ul>';
+					results.errors.forEach((error) => {
+						msg += `<li>${error.sheet}: ${error.error}</li>`;
+					});
+					msg += "</ul>";
+				}
+
+				frappe.msgprint({
+					title: __("Import Results"),
+					message: msg,
+					indicator: results.errors.length > 0 ? "red" : "green",
+				});
+
+				// Refresh list
+				cur_list.refresh();
+			}
+		},
+	});
 }
 
 function show_bulk_import_results(results, listview) {

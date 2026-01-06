@@ -15,6 +15,8 @@
   "section_break_2",
   "quantity",
   "unit_price",
+  "shipping_fees",
+  "commission",
   "total_price",
   "stock_available"
  ],
@@ -74,6 +76,22 @@
    "in_list_view": 1,
    "label": "Unit Price",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "For reference only - not included in Sales Invoice",
+   "fieldname": "shipping_fees",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Shipping Fees"
+  },
+  {
+   "default": "0",
+   "description": "For reference only - platform commission",
+   "fieldname": "commission",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Commission"
   },
   {
    "fieldname": "total_price",

@@ -178,7 +178,7 @@ def mark_ready_to_ship(platform_order_name):
     stock_entry.to_warehouse = hold_warehouse
 
     # Add custom field link if exists
-    if hasattr(stock_entry, "platform_order"):
+    if frappe.db.has_column("Stock Entry", "platform_order"):
         stock_entry.platform_order = doc.name
 
     for item in doc.items:
@@ -214,118 +214,112 @@ def mark_ready_to_ship(platform_order_name):
 def mark_shipped(platform_order_name):
     """
     Mark Platform Order as Shipped
-    Creates Stock Entry from Hold Warehouse (Material Issue) and auto-creates Delivery Note
+    Creates Sales Invoice with Update Stock enabled (deducts from Hold Warehouse)
+    Auto-submits Sales Invoice
 
     Args:
         platform_order_name: Name of the Platform Order document
 
     Returns:
-        dict: Success status, stock entry name, and delivery note name
+        dict: Success status and sales invoice name
     """
     doc = frappe.get_doc("Platform Order", platform_order_name)
 
-    # Check if in Ready to Ship status
+    # Validation: Must be in Ready to Ship status
     if doc.delivery_status != "Ready to Ship":
-        frappe.throw(_("Can only mark Ready to Ship orders as Shipped"))
+        frappe.throw(_("Platform Order must be in 'Ready to Ship' status to mark as shipped"))
+
+    # Validation: Must be submitted
+    if doc.docstatus != 1:
+        frappe.throw(_("Platform Order must be submitted before marking as shipped"))
 
     # Validate customer is set
     if not doc.customer:
-        frappe.throw(_("Customer is required to create Delivery Note. Please set Customer first."))
+        frappe.throw(_("Customer is required to create Sales Invoice. Please set Customer first."))
 
-    # Validate stock in Hold Warehouse
-    stock_errors = []
+    # Get company and warehouses
+    company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company")
+    if not company:
+        company = frappe.db.get_value("Company", {}, "name")
     hold_warehouse = get_hold_warehouse()
 
+    # Validate stock availability in Hold Warehouse
+    stock_errors = []
     for item in doc.items:
-        available_qty = frappe.db.get_value(
-            "Bin", {"item_code": item.item_code, "warehouse": hold_warehouse}, "actual_qty"
+        stock_qty = frappe.db.get_value(
+            "Bin",
+            {"item_code": item.item_code, "warehouse": hold_warehouse},
+            "actual_qty"
         ) or 0
 
-        if available_qty < item.quantity:
+        if stock_qty < item.quantity:
             stock_errors.append(
-                _("Item {0}: Required {1}, Available in Hold {2}").format(
-                    item.item_code, item.quantity, available_qty
+                _("Item {0}: Required {1}, Available {2}").format(
+                    item.item_code, item.quantity, stock_qty
                 )
             )
 
     if stock_errors:
-        frappe.throw(_("Insufficient Stock in Hold Warehouse:<br>") + "<br>".join(stock_errors))
+        frappe.throw(_("Insufficient stock in Hold Warehouse:<br>") + "<br>".join(stock_errors))
 
-    # Create Stock Entry: Hold Warehouse → Material Issue
-    stock_entry = frappe.new_doc("Stock Entry")
-    stock_entry.stock_entry_type = "Material Issue"
-    stock_entry.from_warehouse = hold_warehouse
+    # Create Sales Invoice with Update Stock enabled
+    sales_invoice = frappe.new_doc("Sales Invoice")
+    sales_invoice.customer = doc.customer
+    sales_invoice.posting_date = frappe.utils.nowdate()
+    sales_invoice.posting_time = frappe.utils.nowtime()
+    sales_invoice.set_posting_time = 1
+    sales_invoice.company = company
 
-    # Add custom field link if exists
-    if hasattr(stock_entry, "platform_order"):
-        stock_entry.platform_order = doc.name
+    # Enable Update Stock (this will auto-create stock ledger entries)
+    sales_invoice.update_stock = 1
+    sales_invoice.set_warehouse = hold_warehouse  # Deduct from Hold Warehouse
 
+    # Link back to Platform Order (if custom field exists)
+    if frappe.db.has_column("Sales Invoice", "platform_order"):
+        sales_invoice.platform_order = doc.name
+
+    # Add items (only unit_price * quantity - NO shipping/commission)
     for item in doc.items:
-        stock_entry.append(
-            "items",
-            {"item_code": item.item_code, "qty": item.quantity, "s_warehouse": hold_warehouse, "basic_rate": item.unit_price},
-        )
-
-    stock_entry.insert()
-    stock_entry.submit()
-
-    # Create Delivery Note
-    delivery_note = frappe.new_doc("Delivery Note")
-    delivery_note.customer = doc.customer
-    delivery_note.posting_date = frappe.utils.nowdate()
-    delivery_note.posting_time = frappe.utils.nowtime()
-    delivery_note.set_posting_time = 1
-
-    # Add custom field link if exists
-    if hasattr(delivery_note, "platform_order"):
-        delivery_note.platform_order = doc.name
-
-    # Get company from settings or first available
-    company = frappe.defaults.get_defaults().get("company")
-    if not company:
-        company = frappe.db.get_value("Company", {}, "name")
-    delivery_note.company = company
-
-    # Add items to Delivery Note
-    for item in doc.items:
-        # Get item details
         item_doc = frappe.get_doc("Item", item.item_code)
 
-        delivery_note.append(
-            "items",
-            {
-                "item_code": item.item_code,
-                "item_name": item_doc.item_name,
-                "description": item_doc.description,
-                "qty": item.quantity,
-                "uom": item_doc.stock_uom,
-                "stock_uom": item_doc.stock_uom,
-                "conversion_factor": 1.0,
-                "warehouse": hold_warehouse,
-                "rate": item.unit_price,
-                "amount": item.total_price,
-            },
+        sales_invoice.append("items", {
+            "item_code": item.item_code,
+            "item_name": item_doc.item_name,
+            "description": item_doc.description or item_doc.item_name,
+            "qty": item.quantity,
+            "uom": item_doc.stock_uom,
+            "stock_uom": item_doc.stock_uom,
+            "conversion_factor": 1.0,
+            "warehouse": hold_warehouse,  # Source warehouse for stock deduction
+            "rate": item.unit_price,
+            "amount": item.quantity * item.unit_price,
+        })
+
+    try:
+        sales_invoice.insert()
+        sales_invoice.submit()
+
+        # Update Platform Order
+        doc.sales_invoice = sales_invoice.name
+        doc.delivery_status = "Shipped"
+        doc.shipped_date = frappe.utils.now()
+        doc.flags.ignore_permissions = True
+        doc.save()
+
+        frappe.msgprint(_("Sales Invoice {0} created and submitted successfully").format(sales_invoice.name))
+
+        return {
+            "success": True,
+            "sales_invoice": sales_invoice.name,
+            "message": "Order marked as Shipped and Sales Invoice created"
+        }
+
+    except Exception as e:
+        frappe.log_error(
+            f"Sales Invoice creation failed for {doc.name}: {str(e)}",
+            "Platform Order Sales Invoice Error"
         )
-
-    delivery_note.insert()
-    delivery_note.submit()
-
-    # Update Platform Order
-    doc.delivery_status = "Shipped"
-    doc.shipped_date = now_datetime()
-    doc.stock_entry_shipped = stock_entry.name
-    doc.delivery_note = delivery_note.name
-    doc.flags.ignore_permissions = True
-    doc.save()
-
-    frappe.msgprint(
-        _("Stock Entry {0} and Delivery Note {1} created. Status updated to Shipped").format(
-            stock_entry.name, delivery_note.name
-        ),
-        indicator="green",
-    )
-
-    return {"success": True, "stock_entry": stock_entry.name, "delivery_note": delivery_note.name}
+        frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
 
 
 @frappe.whitelist()
@@ -497,6 +491,203 @@ def match_unmatched_item(platform_order, unmatched_item_row_name, item_code):
     return {"success": True, "message": _("Item matched successfully")}
 
 
+# Platform-specific Excel column mappings
+PLATFORM_EXCEL_MAPPINGS = {
+    "Amazon": {
+        "order_number": "amazon-order-id",
+        "platform_date": "last-updated-date",
+        "asin_sku": "asin",
+        "quantity": "quantity",
+        "unit_price": "item-price",
+        "shipping_fees": "shipping-price",
+        "status_filter": None,
+        "status_value": None,
+        "default_qty": None,
+    },
+    "Noon": {
+        "order_number": "order_nr",
+        "platform_date": "fulfillment_timestamp",
+        "asin_sku": "sku",
+        "quantity": "quantity",
+        "status_filter": "order_status",
+        "status_value": None,
+        "default_qty": None,
+    },
+    "Jumia": {
+        "order_number": "Order Number",
+        "platform_date": "Updated At",
+        "asin_sku": "Sku",
+        "unit_price": "Unit Price",
+        "shipping_fees": "Shipping Fee",
+        "status_filter": "Status",
+        "status_value": "ready to ship",
+        "default_qty": 1,  # Jumia always qty = 1
+    },
+    "Homzmart": {
+        "order_number": ["itemid", "orderId"],  # Concatenated
+        "platform_date": "updated_at",
+        "asin_sku": "itemSku",
+        "quantity": "itemQty",
+        "unit_price": "itemPrice",
+        "shipping_fees": "cod_fees",
+        "commission": "commission_fees",
+        "status_filter": "status",
+        "status_value": "ready to ship",
+        "default_qty": None,
+    },
+}
+
+
+# Platform detection patterns - unique columns that identify each platform
+PLATFORM_DETECTION_PATTERNS = {
+    "Amazon": {
+        "required_columns": ["amazon-order-id", "asin"],  # Must have these
+        "optional_columns": ["item-price", "shipping-price", "last-updated-date"],  # Nice to have
+        "min_match": 2,  # Need at least 2 columns to confirm
+    },
+    "Noon": {
+        "required_columns": ["order_nr", "sku"],
+        "optional_columns": ["fulfillment_timestamp", "order_status"],
+        "min_match": 2,
+    },
+    "Jumia": {
+        "required_columns": ["Sku", "Order Number"],  # Note: capital S in Sku
+        "optional_columns": ["Updated At", "Shipping Fee", "Unit Price"],
+        "min_match": 2,
+    },
+    "Homzmart": {
+        "required_columns": ["itemid", "itemSku"],
+        "optional_columns": ["orderId", "itemQty", "commission_fees", "cod_fees"],
+        "min_match": 2,
+    },
+}
+
+
+def get_excel_value(row, platform, field_name):
+    """Extract value from Excel row based on platform-specific mapping"""
+    mapping = PLATFORM_EXCEL_MAPPINGS.get(platform, {})
+    column_name = mapping.get(field_name)
+
+    if not column_name:
+        return None
+
+    # Handle concatenated fields (Homzmart order_number)
+    if isinstance(column_name, list):
+        values = [str(row.get(col, "")).strip() for col in column_name]
+        return "-".join(values) if all(values) else None
+
+    # Single column
+    value = row.get(column_name)
+
+    # Handle default values (e.g., Jumia qty = 1)
+    if value is None or value == "":
+        default_value = mapping.get(f"default_{field_name}")
+        if default_value is not None:
+            return default_value
+
+    return value
+
+
+def should_import_row(row, platform):
+    """Check if row should be imported based on platform status filter"""
+    mapping = PLATFORM_EXCEL_MAPPINGS.get(platform, {})
+    status_filter = mapping.get("status_filter")
+
+    if not status_filter:
+        return True
+
+    status_value = mapping.get("status_value")
+    if not status_value:
+        return True
+
+    row_status = str(row.get(status_filter, "")).strip().lower()
+    required_status = str(status_value).lower()
+
+    return row_status == required_status
+
+
+def detect_platform_from_columns(column_headers):
+    """
+    Detect platform by analyzing column headers
+
+    Args:
+        column_headers: List of column names from Excel sheet
+
+    Returns:
+        str: Platform name ("Amazon", "Noon", "Jumia", "Homzmart") or None
+    """
+    if not column_headers:
+        return None
+
+    # Normalize column headers (strip whitespace, preserve case)
+    normalized_headers = [str(col).strip() for col in column_headers]
+
+    # Score each platform based on column matches
+    platform_scores = {}
+
+    for platform, pattern in PLATFORM_DETECTION_PATTERNS.items():
+        score = 0
+        required_matches = 0
+
+        # Check required columns
+        for req_col in pattern["required_columns"]:
+            if req_col in normalized_headers:
+                required_matches += 1
+                score += 10  # High weight for required columns
+
+        # Check optional columns
+        for opt_col in pattern["optional_columns"]:
+            if opt_col in normalized_headers:
+                score += 1  # Lower weight for optional
+
+        # Only consider if minimum required columns are matched
+        if required_matches >= pattern["min_match"]:
+            platform_scores[platform] = score
+
+    # Return platform with highest score
+    if platform_scores:
+        return max(platform_scores, key=platform_scores.get)
+
+    return None
+
+
+def filter_columns_by_platform(row, platform):
+    """
+    Filter row to only include columns defined in platform mapping
+
+    Args:
+        row: Dictionary of all columns from Excel
+        platform: Detected platform name
+
+    Returns:
+        dict: Filtered row with only relevant columns
+    """
+    if not platform or platform not in PLATFORM_EXCEL_MAPPINGS:
+        return row
+
+    mapping = PLATFORM_EXCEL_MAPPINGS[platform]
+    filtered_row = {}
+
+    # Keep standard column if exists
+    if "Platform" in row:
+        filtered_row["Platform"] = row["Platform"]
+
+    # Include only mapped columns
+    for field_name, column_name in mapping.items():
+        if field_name.startswith("status_") or field_name.startswith("default_"):
+            continue  # Skip config keys
+
+        if isinstance(column_name, list):
+            # Handle concatenated columns (Homzmart)
+            for col in column_name:
+                if col in row:
+                    filtered_row[col] = row[col]
+        elif column_name and column_name in row:
+            filtered_row[column_name] = row[column_name]
+
+    return filtered_row
+
+
 @frappe.whitelist()
 def import_platform_orders_from_excel(data, platform_order_name):
     """
@@ -525,14 +716,22 @@ def import_platform_orders_from_excel(data, platform_order_name):
         main_warehouse = get_main_warehouse()
 
         for row_idx, row in enumerate(data, start=2):
-            # Extract data from row object
+            # Extract platform (standard column)
             platform = str(row.get("Platform", "")).strip()
-            platform_date_raw = row.get("Platform Date", "")
-            order_number = str(row.get("Order Number", "")).strip()
-            asin_sku = str(row.get("Asin/Sku", "")).strip()
-            quantity = float(row.get("Quantity", 0))
-            unit_price = float(row.get("Unit Price", 0))
-            total_price = float(row.get("Total Price", 0))
+
+            # Skip if status filter doesn't match
+            if platform and not should_import_row(row, platform):
+                continue
+
+            # Extract platform-specific fields
+            platform_date_raw = get_excel_value(row, platform, "platform_date") or row.get("Platform Date", "")
+            order_number = get_excel_value(row, platform, "order_number") or str(row.get("Order Number", "")).strip()
+            asin_sku = get_excel_value(row, platform, "asin_sku") or str(row.get("Asin/Sku", "")).strip()
+            quantity = float(get_excel_value(row, platform, "quantity") or row.get("Quantity", 0))
+            unit_price = float(get_excel_value(row, platform, "unit_price") or row.get("Unit Price", 0))
+            shipping_fees = float(get_excel_value(row, platform, "shipping_fees") or 0)
+            commission = float(get_excel_value(row, platform, "commission") or 0)
+            total_price = float(row.get("Total Price", 0))  # Fallback to row value if exists
 
             # Convert Excel date to proper format
             platform_date = convert_excel_date(platform_date_raw)
@@ -556,6 +755,8 @@ def import_platform_orders_from_excel(data, platform_order_name):
                                 "asin_sku": asin_sku,
                                 "quantity": quantity,
                                 "unit_price": unit_price,
+                                "shipping_fees": shipping_fees,
+                                "commission": commission,
                                 "total_price": total_price,
                                 "platform": platform,
                                 "row_number": row_idx,
@@ -578,6 +779,8 @@ def import_platform_orders_from_excel(data, platform_order_name):
                     "asin_sku": asin_sku,
                     "quantity": quantity,
                     "unit_price": unit_price,
+                    "shipping_fees": shipping_fees,
+                    "commission": commission,
                     "total_price": total_price,
                     "stock_available": stock_qty,
                 }
@@ -608,6 +811,8 @@ def import_platform_orders_from_excel(data, platform_order_name):
                         "asin_sku": asin_sku,
                         "quantity": quantity,
                         "unit_price": unit_price,
+                        "shipping_fees": shipping_fees,
+                        "commission": commission,
                         "total_price": total_price,
                         "platform": platform,
                         "row_number": row_idx,
@@ -820,10 +1025,16 @@ def bulk_import_platform_orders_from_excel(data):
         main_warehouse = get_main_warehouse()
 
         for row_idx, row in enumerate(data, start=2):
-            # Extract header data
+            # Extract platform (standard column)
             platform = str(row.get("Platform", "")).strip()
-            platform_date_raw = row.get("Platform Date", "")
-            order_number = str(row.get("Order Number", "")).strip()
+
+            # Skip if status filter doesn't match
+            if platform and not should_import_row(row, platform):
+                continue
+
+            # Extract platform-specific fields
+            platform_date_raw = get_excel_value(row, platform, "platform_date") or row.get("Platform Date", "")
+            order_number = get_excel_value(row, platform, "order_number") or str(row.get("Order Number", "")).strip()
 
             # Convert Excel date to proper format
             platform_date = convert_excel_date(platform_date_raw)
@@ -844,11 +1055,13 @@ def bulk_import_platform_orders_from_excel(data):
                 orders_data[order_key]["platform_date"] = platform_date
                 orders_data[order_key]["order_number"] = order_number
 
-            # Extract item data
-            asin_sku = str(row.get("Asin/Sku", "")).strip()
-            quantity = float(row.get("Quantity", 0))
-            unit_price = float(row.get("Unit Price", 0))
-            total_price = float(row.get("Total Price", 0))
+            # Extract item data with platform-specific mappings
+            asin_sku = get_excel_value(row, platform, "asin_sku") or str(row.get("Asin/Sku", "")).strip()
+            quantity = float(get_excel_value(row, platform, "quantity") or row.get("Quantity", 0))
+            unit_price = float(get_excel_value(row, platform, "unit_price") or row.get("Unit Price", 0))
+            shipping_fees = float(get_excel_value(row, platform, "shipping_fees") or 0)
+            commission = float(get_excel_value(row, platform, "commission") or 0)
+            total_price = float(row.get("Total Price", 0))  # Fallback to row value if exists
 
             # Skip if no ASIN/SKU
             if not asin_sku:
@@ -868,6 +1081,8 @@ def bulk_import_platform_orders_from_excel(data):
                         "asin_sku": asin_sku,
                         "quantity": quantity,
                         "unit_price": unit_price,
+                        "shipping_fees": shipping_fees,
+                        "commission": commission,
                         "total_price": total_price,
                     }
                 )
@@ -908,6 +1123,8 @@ def bulk_import_platform_orders_from_excel(data):
                     "asin_sku": asin_sku,
                     "quantity": quantity,
                     "unit_price": unit_price,
+                    "shipping_fees": shipping_fees,
+                    "commission": commission,
                     "total_price": total_price,
                     "stock_available": stock_qty,
                 }
@@ -1049,3 +1266,86 @@ def bulk_import_platform_orders_from_excel(data):
     except Exception as e:
         frappe.log_error(title="Platform Order Bulk Import", message=f"Fatal Error: {str(e)}")
         return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def process_multi_sheet_excel(sheets_data):
+    """
+    Process multiple sheets from Excel file with auto-detection
+
+    Args:
+        sheets_data: JSON string containing array of {sheet_name, data} objects
+
+    Returns:
+        dict: Results summary with created orders, warnings, errors per sheet
+    """
+    import json
+
+    if isinstance(sheets_data, str):
+        sheets_data = json.loads(sheets_data)
+
+    results = {
+        "sheets_processed": 0,
+        "sheets_skipped": 0,
+        "total_orders_created": 0,
+        "sheet_results": [],
+        "warnings": [],
+        "errors": [],
+    }
+
+    for sheet_info in sheets_data:
+        sheet_name = sheet_info.get("sheet_name", "Unknown")
+        data = sheet_info.get("data", [])
+
+        if not data or len(data) == 0:
+            results["sheets_skipped"] += 1
+            results["warnings"].append({"sheet": sheet_name, "message": "Sheet is empty - skipped"})
+            continue
+
+        # Detect platform from first row headers
+        first_row = data[0]
+        column_headers = list(first_row.keys())
+        detected_platform = detect_platform_from_columns(column_headers)
+
+        if not detected_platform:
+            results["sheets_skipped"] += 1
+            results["warnings"].append({
+                "sheet": sheet_name,
+                "message": f"Could not detect platform from columns: {', '.join(column_headers[:5])}...",
+            })
+            continue
+
+        # Add platform to each row
+        for row in data:
+            row["Platform"] = detected_platform
+
+        # Call existing bulk import with enhanced data
+        try:
+            import_result = bulk_import_platform_orders_from_excel(data)
+
+            # Extract created orders count from import result
+            created_count = 0
+            failed_count = 0
+            if import_result.get("success") and import_result.get("results"):
+                res = import_result["results"]
+                created_count = len(res.get("created", []))
+                failed_count = len(res.get("failed", []))
+
+            results["sheets_processed"] += 1
+            results["total_orders_created"] += created_count
+            results["sheet_results"].append({
+                "sheet_name": sheet_name,
+                "platform": detected_platform,
+                "orders_created": created_count,
+                "orders_failed": failed_count,
+                "warnings": import_result.get("results", {}).get("warnings", []),
+            })
+
+        except Exception as e:
+            results["sheets_skipped"] += 1
+            results["errors"].append({"sheet": sheet_name, "platform": detected_platform, "error": str(e)})
+            frappe.log_error(
+                f"Multi-sheet import failed for {sheet_name}: {str(e)}", "Platform Order Multi-Sheet Import Error"
+            )
+
+    return results
