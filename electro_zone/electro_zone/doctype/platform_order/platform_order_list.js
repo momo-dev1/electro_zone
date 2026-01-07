@@ -346,15 +346,11 @@ function show_multi_sheet_preview(sheets_data, dialog) {
 		let detected_platform = "Unknown";
 		let import_type = "order_import";
 
-		// Debug: Log columns for troubleshooting
-		console.log("Sheet:", sheet_info.sheet_name, "Columns:", columns);
-
 		// Check for Noon customer name update format
 		const has_source_doc = columns.some(c => c.includes("source doc line nr") || c === "source doc line nr");
 		const has_receiver = columns.some(c => c.includes("receiver legal entity") || c === "receiver legal entity" || c.includes("receiver legal name") || c === "receiver legal name");
 
 		if (has_source_doc && has_receiver) {
-			console.log("Detected Noon Customer Name Update");
 			detected_platform = "Noon";
 			import_type = "customer_name_update";
 		}

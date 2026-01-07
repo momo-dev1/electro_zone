@@ -707,21 +707,11 @@ def detect_noon_import_type(column_headers):
     # Normalize column headers (strip whitespace, lowercase, remove extra spaces)
     normalized = [" ".join(str(col).strip().lower().split()) for col in column_headers]
 
-    # Debug logging
-    frappe.log_error(
-        title="Noon Import Detection - Column Headers",
-        message=f"Original headers: {column_headers}\nNormalized headers: {normalized}"
-    )
-
     # Check customer name update pattern (Source Doc Line Nr, Receiver Legal Entity)
     has_source_doc = any("source doc line nr" in col or col == "source doc line nr" for col in normalized)
     has_receiver = any("receiver legal entity" in col or col == "receiver legal entity" for col in normalized)
 
     if has_source_doc and has_receiver:
-        frappe.log_error(
-            title="Noon Import Detection",
-            message=f"Detected customer_name_update\nHeaders: {normalized}"
-        )
         return "customer_name_update"
 
     # Check price update pattern (item_nr, offer_price, status)
