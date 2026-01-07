@@ -87,14 +87,13 @@ function render_listings_table(frm, listings) {
                 <table class="table table-bordered table-hover" style="margin: 0; min-width: 900px;">
                     <thead style="background-color: #f5f7fa;">
                         <tr>
-                            <th style="width: 13%;">Platform</th>
-                            <th style="width: 15%;">ASIN / SKU</th>
-                            <th style="width: 15%;">Partner ASIN/SKU</th>
-                            <th style="width: 11%;">Commission</th>
-                            <th style="width: 12%;">Shipping Fee</th>
-                            <th style="width: 12%;">Effective Date</th>
-                            <th style="width: 8%;">Link</th>
-                            <th style="width: 14%;">Actions</th>
+                            <th style="width: 15%;">Platform</th>
+                            <th style="width: 18%;">ASIN / SKU</th>
+                            <th style="width: 13%;">Commission</th>
+                            <th style="width: 14%;">Shipping Fee</th>
+                            <th style="width: 14%;">Effective Date</th>
+                            <th style="width: 9%;">Link</th>
+                            <th style="width: 17%;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
