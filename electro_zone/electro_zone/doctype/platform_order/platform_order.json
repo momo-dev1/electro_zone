@@ -11,6 +11,10 @@
   "platform_date",
   "order_number",
   "customer",
+  "customer_name",
+  "customer_mobile",
+  "customer_address",
+  "customer_region",
   "column_break_1",
   "rep_name",
   "delivery_status",
@@ -74,6 +78,27 @@
    "label": "Customer",
    "options": "Customer",
    "reqd": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name"
+  },
+  {
+   "fieldname": "customer_mobile",
+   "fieldtype": "Data",
+   "label": "Customer Mobile"
+  },
+  {
+   "fieldname": "customer_address",
+   "fieldtype": "Small Text",
+   "label": "Customer Address"
+  },
+  {
+   "fieldname": "customer_region",
+   "fieldtype": "Data",
+   "label": "Customer Region"
   },
   {
    "fieldname": "column_break_1",

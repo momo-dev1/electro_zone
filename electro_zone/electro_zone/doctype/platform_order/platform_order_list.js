@@ -340,22 +340,47 @@ function show_multi_sheet_preview(sheets_data, dialog) {
 	sheets_data.forEach((sheet_info) => {
 		total_rows += sheet_info.data.length;
 
-		// Detect platform from columns (preview only)
+		// Detect platform or import type from columns (preview only)
 		const first_row = sheet_info.data[0];
-		const columns = Object.keys(first_row);
+		const columns = Object.keys(first_row).map(c => c.toLowerCase().trim());
 		let detected_platform = "Unknown";
+		let import_type = "order_import";
 
-		// Simple detection logic (matches backend)
-		if (columns.includes("amazon-order-id")) detected_platform = "Amazon";
-		else if (columns.includes("order_nr")) detected_platform = "Noon";
-		else if (columns.includes("Sku") && columns.includes("Order Number"))
+		// Debug: Log columns for troubleshooting
+		console.log("Sheet:", sheet_info.sheet_name, "Columns:", columns);
+
+		// Check for Noon customer name update format
+		const has_source_doc = columns.some(c => c.includes("source doc line nr") || c === "source doc line nr");
+		const has_receiver = columns.some(c => c.includes("receiver legal entity") || c === "receiver legal entity" || c.includes("receiver legal name") || c === "receiver legal name");
+
+		if (has_source_doc && has_receiver) {
+			console.log("Detected Noon Customer Name Update");
+			detected_platform = "Noon";
+			import_type = "customer_name_update";
+		}
+		// Check for Noon price update format
+		else if (columns.includes("item_nr") && columns.includes("offer_price") && columns.includes("status")) {
+			detected_platform = "Noon";
+			import_type = "price_update";
+		}
+		// Simple detection logic for order imports (matches backend)
+		else if (columns.includes("amazon-order-id")) {
+			detected_platform = "Amazon";
+		}
+		else if (columns.includes("order_nr") || columns.includes("purchase_item_nr")) {
+			detected_platform = "Noon";
+		}
+		else if (columns.includes("sku") && columns.includes("order number")) {
 			detected_platform = "Jumia";
-		else if (columns.includes("itemid") && columns.includes("itemSku"))
+		}
+		else if (columns.includes("itemid") && columns.includes("itemsku")) {
 			detected_platform = "Homzmart";
+		}
 
 		sheets_summary.push({
 			sheet_name: sheet_info.sheet_name,
 			platform: detected_platform,
+			import_type: import_type,
 			rows: sheet_info.data.length,
 		});
 	});
@@ -379,10 +404,16 @@ function show_multi_sheet_preview(sheets_data, dialog) {
 
 	sheets_summary.forEach((sheet) => {
 		const platform_color = sheet.platform === "Unknown" ? "text-danger" : "text-success";
+		let type_badge = '<span class="badge badge-primary">Order Import</span>';
+		if (sheet.import_type === "price_update") {
+			type_badge = '<span class="badge badge-info">Price Update</span>';
+		} else if (sheet.import_type === "customer_name_update") {
+			type_badge = '<span class="badge badge-warning">Customer Name Update</span>';
+		}
 		summary_html += `
 			<tr>
 				<td>${sheet.sheet_name}</td>
-				<td class="${platform_color}"><strong>${sheet.platform}</strong></td>
+				<td class="${platform_color}"><strong>${sheet.platform}</strong> ${type_badge}</td>
 				<td>${sheet.rows}</td>
 			</tr>
 		`;
@@ -482,13 +513,33 @@ function import_multi_sheet_data(sheets_data, dialog) {
 				if (results.sheet_results && results.sheet_results.length > 0) {
 					msg += "<h5>Details by Sheet:</h5><ul>";
 					results.sheet_results.forEach((sheet_result) => {
-						msg += `
-							<li>
-								<strong>${sheet_result.sheet_name}</strong> (${sheet_result.platform}):
-								${sheet_result.orders_created} created,
-								${sheet_result.orders_failed} failed
-							</li>
-						`;
+						if (sheet_result.import_type === "price_update") {
+							msg += `
+								<li>
+									<strong>${sheet_result.sheet_name}</strong> (${sheet_result.platform} - Price Update):
+									${sheet_result.items_updated} items updated,
+									${sheet_result.items_skipped} skipped,
+									${sheet_result.not_found} not found
+								</li>
+							`;
+						} else if (sheet_result.import_type === "customer_name_update") {
+							msg += `
+								<li>
+									<strong>${sheet_result.sheet_name}</strong> (${sheet_result.platform} - Customer Name Update):
+									${sheet_result.orders_updated} orders updated,
+									${sheet_result.not_found} not found
+								</li>
+							`;
+						} else {
+							// Existing order import display
+							msg += `
+								<li>
+									<strong>${sheet_result.sheet_name}</strong> (${sheet_result.platform}):
+									${sheet_result.orders_created} created,
+									${sheet_result.orders_failed} failed
+								</li>
+							`;
+						}
 					});
 					msg += "</ul>";
 				}
