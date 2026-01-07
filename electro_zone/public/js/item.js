@@ -111,7 +111,6 @@ function render_listings_table(frm, listings) {
                 <tr>
                     <td><strong>${listing.platform}</strong></td>
                     <td style="font-family: monospace;">${listing.asin}</td>
-                    <td style="font-family: monospace;">${listing.partner_asin_sku || "-"}</td>
                     <td>${commission_display}</td>
                     <td>${shipping_display}</td>
                     <td>${frappe.datetime.str_to_user(listing.effective_date)}</td>

@@ -69,7 +69,6 @@ def get_latest_marketplace_listings(item_code):
 				SELECT
 					mpld.platform,
 					mpld.asin,
-					mpld.partner_asin_sku,
 					mpld.commission,
 					mpld.shipping_fee,
 					mpld.listing_url,
