@@ -83,8 +83,9 @@ frappe.ui.form.on("Platform Order", {
             });
         }
 
-        // Show Match Items button if there are unmatched items
-        if (frm.doc.has_unmatched_items && frm.doc.docstatus === 0) {
+        // Show Match Items button if there are unmatched items (is_matched = 0)
+        let has_unmatched = frm.doc.items && frm.doc.items.some(item => !item.is_matched);
+        if (has_unmatched && frm.doc.docstatus === 0) {
             frm.add_custom_button(__("Match Items"), function () {
                 show_match_items_dialog(frm);
             }).addClass("btn-warning");
@@ -191,6 +192,9 @@ function set_status_indicator(frm) {
 }
 
 function show_match_items_dialog(frm) {
+    // Filter unmatched items (is_matched = 0)
+    let unmatched_items = frm.doc.items.filter(item => !item.is_matched);
+
     let d = new frappe.ui.Dialog({
         title: __("Match Unmatched Items"),
         fields: [
@@ -202,8 +206,8 @@ function show_match_items_dialog(frm) {
             {
                 fieldname: "unmatched_item",
                 fieldtype: "Select",
-                label: __("Unmatched Item (ASIN/SKU)"),
-                options: frm.doc.unmatched_items.map(item => `${item.name}:${item.asin_sku}`).join("\n"),
+                label: __("Unmatched Item (Platform SKU)"),
+                options: unmatched_items.map(item => `${item.name}:${item.platform_sku}`).join("\n"),
                 reqd: 1
             },
             {
@@ -241,18 +245,3 @@ function show_match_items_dialog(frm) {
     });
     d.show();
 }
-
-// Platform Order Unmatched Item child table events
-frappe.ui.form.on("Platform Order Unmatched Item", {
-    quantity: function(frm, cdt, cdn) {
-        let item = locals[cdt][cdn];
-        let total = (item.quantity || 0) * (item.unit_price || 0);
-        frappe.model.set_value(cdt, cdn, "total_price", total);
-    },
-
-    unit_price: function(frm, cdt, cdn) {
-        let item = locals[cdt][cdn];
-        let total = (item.quantity || 0) * (item.unit_price || 0);
-        frappe.model.set_value(cdt, cdn, "total_price", total);
-    }
-});

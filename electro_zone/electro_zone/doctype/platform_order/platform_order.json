@@ -1,310 +1,353 @@
 {
- "actions": [],
- "allow_rename": 1,
- "autoname": "naming_series:",
- "creation": "2026-01-03 12:00:00",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": [
-  "section_break_1",
-  "platform",
-  "platform_date",
-  "order_number",
-  "customer",
-  "customer_name",
-  "customer_mobile",
-  "customer_address",
-  "customer_region",
-  "column_break_1",
-  "rep_name",
-  "delivery_status",
-  "match_status",
-  "stock_status",
-  "has_unmatched_items",
-  "was_unmatched",
-  "section_break_items",
-  "items",
-  "unmatched_items",
-  "section_break_totals",
-  "total_quantity",
-  "column_break_totals",
-  "total_amount",
-  "section_break_tracking",
-  "upload_file",
-  "ready_to_ship_date",
-  "shipped_date",
-  "delivery_note",
-  "sales_invoice",
-  "column_break_tracking",
-  "stock_entry_ready",
-  "stock_entry_shipped",
-  "section_break_system",
-  "naming_series",
-  "amended_from"
- ],
- "fields": [
-  {
-   "fieldname": "section_break_1",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "platform",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Platform",
-   "options": "Amazon\nNoon\nJumia\nB-tech\nHomzmart",
-   "reqd": 1
-  },
-  {
-   "fieldname": "platform_date",
-   "fieldtype": "Date",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Platform Date",
-   "reqd": 1
-  },
-  {
-   "fieldname": "order_number",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Order Number",
-   "reqd": 1,
-   "unique": 1
-  },
-  {
-   "fieldname": "customer",
-   "fieldtype": "Link",
-   "label": "Customer",
-   "options": "Customer",
-   "reqd": 1
-  },
-  {
-   "fieldname": "customer_name",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Customer Name"
-  },
-  {
-   "fieldname": "customer_mobile",
-   "fieldtype": "Data",
-   "label": "Customer Mobile"
-  },
-  {
-   "fieldname": "customer_address",
-   "fieldtype": "Small Text",
-   "label": "Customer Address"
-  },
-  {
-   "fieldname": "customer_region",
-   "fieldtype": "Data",
-   "label": "Customer Region"
-  },
-  {
-   "fieldname": "column_break_1",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "rep_name",
-   "fieldtype": "Link",
-   "label": "Rep Name",
-   "options": "User",
-   "read_only": 1
-  },
-  {
-   "allow_on_submit": 1,
-   "default": "Pending",
-   "fieldname": "delivery_status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Delivery Status",
-   "options": "Pending\nReady to Ship\nShipped\nDelivered\nCanceled\nDelivery Failed\nReturned",
-   "reqd": 1
-  },
-  {
-   "fieldname": "match_status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Match Status",
-   "options": "Fully Matched\nPartially Matched\nUnmatched\nMatched After Edit",
-   "read_only": 1
-  },
-  {
-   "fieldname": "stock_status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Stock Status",
-   "options": "Stock Available\nInsufficient Stock\nNo Stock",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "has_unmatched_items",
-   "fieldtype": "Check",
-   "label": "Has Unmatched Items",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "was_unmatched",
-   "fieldtype": "Check",
-   "hidden": 1,
-   "label": "Was Unmatched",
-   "read_only": 1
-  },
-  {
-   "fieldname": "section_break_items",
-   "fieldtype": "Section Break",
-   "label": "Items"
-  },
-  {
-   "fieldname": "items",
-   "fieldtype": "Table",
-   "label": "Matched Items",
-   "options": "Platform Order Item"
-  },
-  {
-   "fieldname": "unmatched_items",
-   "fieldtype": "Table",
-   "label": "Unmatched Items",
-   "options": "Platform Order Unmatched Item"
-  },
-  {
-   "fieldname": "section_break_totals",
-   "fieldtype": "Section Break",
-   "label": "Totals"
-  },
-  {
-   "fieldname": "total_quantity",
-   "fieldtype": "Int",
-   "label": "Total Quantity",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_totals",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "total_amount",
-   "fieldtype": "Currency",
-   "label": "Total Amount",
-   "read_only": 1
-  },
-  {
-   "collapsible": 1,
-   "fieldname": "section_break_tracking",
-   "fieldtype": "Section Break",
-   "label": "Tracking"
-  },
-  {
-   "fieldname": "upload_file",
-   "fieldtype": "Attach",
-   "label": "Upload File"
-  },
-  {
-   "fieldname": "ready_to_ship_date",
-   "fieldtype": "Datetime",
-   "label": "Ready to Ship Date",
-   "read_only": 1
-  },
-  {
-   "allow_on_submit": 1,
-   "fieldname": "shipped_date",
-   "fieldtype": "Datetime",
-   "label": "Shipped Date",
-   "read_only": 1
-  },
-  {
-   "fieldname": "delivery_note",
-   "fieldtype": "Link",
-   "label": "Delivery Note",
-   "options": "Delivery Note",
-   "read_only": 1
-  },
-  {
-   "allow_on_submit": 1,
-   "description": "Auto-created when marked as Shipped",
-   "fieldname": "sales_invoice",
-   "fieldtype": "Link",
-   "label": "Sales Invoice",
-   "options": "Sales Invoice",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_tracking",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "stock_entry_ready",
-   "fieldtype": "Link",
-   "label": "Stock Entry Ready",
-   "options": "Stock Entry",
-   "read_only": 1
-  },
-  {
-   "fieldname": "stock_entry_shipped",
-   "fieldtype": "Link",
-   "label": "Stock Entry Shipped",
-   "options": "Stock Entry",
-   "read_only": 1
-  },
-  {
-   "collapsible": 1,
-   "fieldname": "section_break_system",
-   "fieldtype": "Section Break",
-   "label": "System"
-  },
-  {
-   "default": "PO-.YYYY.-.MM.-.DD.-.####",
-   "fieldname": "naming_series",
-   "fieldtype": "Select",
-   "label": "Series",
-   "options": "PO-.YYYY.-.MM.-.DD.-.####",
-   "read_only": 1,
-   "reqd": 1
-  },
-  {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "label": "Amended From",
-   "no_copy": 1,
-   "options": "Platform Order",
-   "print_hide": 1,
-   "read_only": 1,
-   "search_index": 1
-  }
- ],
- "index_web_pages_for_search": 1,
- "is_submittable": 1,
- "links": [],
- "modified": "2026-01-03 13:42:27.021927",
- "modified_by": "Administrator",
- "module": "Electro Zone",
- "name": "Platform Order",
- "naming_rule": "By \"Naming Series\" field",
- "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "submit": 1,
-   "write": 1
-  }
- ],
- "row_format": "Dynamic",
- "sort_field": "platform_date",
- "sort_order": "DESC",
- "states": [],
- "title_field": "order_number",
- "track_changes": 1
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2026-01-03 12:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "section_break_order_info",
+        "platform",
+        "fulfillment_channel",
+        "purchase_date",
+        "order_number",
+        "order_status",
+        "column_break_order",
+        "brand_manager",
+        "section_break_customer",
+        "customer_name",
+        "mobile_number",
+        "column_break_customer",
+        "city",
+        "region",
+        "address",
+        "section_break_item",
+        "items",
+        "section_break_financial",
+        "shipping_collection",
+        "commission_percent",
+        "commission_value",
+        "cod_collection",
+        "column_break_financial",
+        "cod_fees",
+        "shipping_fees",
+        "subsidy",
+        "cash_collection",
+        "column_break_financial_2",
+        "adjustment",
+        "order_value",
+        "section_break_tracking",
+        "upload_file",
+        "ready_to_ship_date",
+        "shipped_date",
+        "delivery_note",
+        "sales_invoice",
+        "column_break_tracking",
+        "stock_entry_ready",
+        "stock_entry_shipped",
+        "match_status",
+        "stock_status",
+        "section_break_system",
+        "naming_series",
+        "amended_from"
+    ],
+    "fields": [
+        {
+            "fieldname": "section_break_order_info",
+            "fieldtype": "Section Break",
+            "label": "Order Information"
+        },
+        {
+            "fieldname": "platform",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Platform",
+            "options": "Amazon\nNoon\nJumia\nB-tech\nHomzmart",
+            "reqd": 1
+        },
+        {
+            "fieldname": "fulfillment_channel",
+            "fieldtype": "Select",
+            "label": "Fulfillment Channel",
+            "options": "Amazon\nMerchant"
+        },
+        {
+            "fieldname": "purchase_date",
+            "fieldtype": "Date",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Purchase Date",
+            "reqd": 1
+        },
+        {
+            "fieldname": "order_number",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Order Number",
+            "reqd": 1,
+            "unique": 1
+        },
+        {
+            "default": "Pending",
+            "fieldname": "order_status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Order Status",
+            "options": "Pending\nReady to Ship\nShipped\nDelivered\nCanceled\nDelivery Failed\nReturned",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_order",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "brand_manager",
+            "fieldtype": "Link",
+            "label": "Brand Manager",
+            "options": "User"
+        },
+        {
+            "fieldname": "section_break_customer",
+            "fieldtype": "Section Break",
+            "label": "Customer Information"
+        },
+        {
+            "fieldname": "customer_name",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Customer Name"
+        },
+        {
+            "fieldname": "mobile_number",
+            "fieldtype": "Data",
+            "label": "Mobile Number"
+        },
+        {
+            "fieldname": "column_break_customer",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "city",
+            "fieldtype": "Data",
+            "label": "City"
+        },
+        {
+            "fieldname": "region",
+            "fieldtype": "Data",
+            "label": "Region"
+        },
+        {
+            "fieldname": "address",
+            "fieldtype": "Small Text",
+            "label": "Address"
+        },
+        {
+            "fieldname": "section_break_item",
+            "fieldtype": "Section Break",
+            "label": "Item Details"
+        },
+        {
+            "fieldname": "items",
+            "fieldtype": "Table",
+            "label": "Items",
+            "options": "Platform Order Item"
+        },
+        {
+            "fieldname": "section_break_financial",
+            "fieldtype": "Section Break",
+            "label": "Financial Details"
+        },
+        {
+            "fieldname": "shipping_collection",
+            "fieldtype": "Currency",
+            "label": "Shipping Collection"
+        },
+        {
+            "fieldname": "commission_percent",
+            "fieldtype": "Percent",
+            "label": "Commission Percent"
+        },
+        {
+            "fieldname": "commission_value",
+            "fieldtype": "Currency",
+            "label": "Commission Value"
+        },
+        {
+            "fieldname": "cod_collection",
+            "fieldtype": "Currency",
+            "label": "COD Collection"
+        },
+        {
+            "fieldname": "column_break_financial",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "cod_fees",
+            "fieldtype": "Currency",
+            "label": "COD Fees"
+        },
+        {
+            "fieldname": "shipping_fees",
+            "fieldtype": "Currency",
+            "label": "Shipping Fees"
+        },
+        {
+            "fieldname": "subsidy",
+            "fieldtype": "Currency",
+            "label": "Subsidy"
+        },
+        {
+            "fieldname": "cash_collection",
+            "fieldtype": "Currency",
+            "label": "Cash Collection"
+        },
+        {
+            "fieldname": "column_break_financial_2",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "adjustment",
+            "fieldtype": "Currency",
+            "label": "Adjustment"
+        },
+        {
+            "fieldname": "order_value",
+            "fieldtype": "Currency",
+            "label": "Order Value",
+            "read_only": 1
+        },
+        {
+            "collapsible": 1,
+            "fieldname": "section_break_tracking",
+            "fieldtype": "Section Break",
+            "label": "Tracking"
+        },
+        {
+            "fieldname": "upload_file",
+            "fieldtype": "Attach",
+            "label": "Upload File"
+        },
+        {
+            "fieldname": "ready_to_ship_date",
+            "fieldtype": "Datetime",
+            "label": "Ready to Ship Date",
+            "read_only": 1
+        },
+        {
+            "allow_on_submit": 1,
+            "fieldname": "shipped_date",
+            "fieldtype": "Datetime",
+            "label": "Shipped Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "delivery_note",
+            "fieldtype": "Link",
+            "label": "Delivery Note",
+            "options": "Delivery Note",
+            "read_only": 1
+        },
+        {
+            "allow_on_submit": 1,
+            "description": "Auto-created when marked as Shipped",
+            "fieldname": "sales_invoice",
+            "fieldtype": "Link",
+            "label": "Sales Invoice",
+            "options": "Sales Invoice",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_tracking",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "stock_entry_ready",
+            "fieldtype": "Link",
+            "label": "Stock Entry Ready",
+            "options": "Stock Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "stock_entry_shipped",
+            "fieldtype": "Link",
+            "label": "Stock Entry Shipped",
+            "options": "Stock Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "match_status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Match Status",
+            "options": "Fully Matched\nPartially Matched\nUnmatched\nMatched After Edit",
+            "read_only": 1
+        },
+        {
+            "fieldname": "stock_status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Stock Status",
+            "options": "Stock Available\nInsufficient Stock\nNo Stock",
+            "read_only": 1
+        },
+        {
+            "collapsible": 1,
+            "fieldname": "section_break_system",
+            "fieldtype": "Section Break",
+            "label": "System"
+        },
+        {
+            "default": "PO-.YYYY.-.MM.-.DD.-.####",
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Series",
+            "options": "PO-.YYYY.-.MM.-.DD.-.####",
+            "read_only": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "amended_from",
+            "fieldtype": "Link",
+            "label": "Amended From",
+            "no_copy": 1,
+            "options": "Platform Order",
+            "print_hide": 1,
+            "read_only": 1,
+            "search_index": 1
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2026-01-07 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Electro Zone",
+    "name": "Platform Order",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "purchase_date",
+    "sort_order": "DESC",
+    "states": [],
+    "title_field": "order_number",
+    "track_changes": 1
 }

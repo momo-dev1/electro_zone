@@ -88,12 +88,12 @@ function render_listings_table(frm, listings) {
                     <thead style="background-color: #f5f7fa;">
                         <tr>
                             <th style="width: 15%;">Platform</th>
-                            <th style="width: 18%;">ASIN / SKU</th>
+                            <th style="width: 20%;">ASIN / SKU</th>
                             <th style="width: 13%;">Commission</th>
                             <th style="width: 14%;">Shipping Fee</th>
                             <th style="width: 14%;">Effective Date</th>
                             <th style="width: 9%;">Link</th>
-                            <th style="width: 17%;">Actions</th>
+                            <th style="width: 15%;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
