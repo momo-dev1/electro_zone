@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import now_datetime, getdate
 from datetime import datetime, timedelta
+import re
 
 
 class PlatformOrder(Document):
@@ -22,8 +23,8 @@ class PlatformOrder(Document):
         # Calculate totals
         self.calculate_totals()
 
-        # Calculate order value for Homzmart and Jumia
-        if self.platform in ["Homzmart", "Jumia"]:
+        # Calculate order value for Homzmart, Jumia, and Noon
+        if self.platform in ["Homzmart", "Jumia", "Noon"]:
             self.calculate_order_value()
 
         # Update match status
@@ -52,13 +53,13 @@ class PlatformOrder(Document):
 
     def calculate_order_value(self):
         """
-        Calculate order_value for Homzmart and Jumia platforms
+        Calculate order_value for Homzmart, Jumia, and Noon platforms
 
         Formula per homz.md/plat.md line 28:
         = Unit Price + Shipping Collection - Commission Value + COD Collection
           - COD Fees - Shipping Fees + Subsidy + Adjustment
         """
-        if self.platform not in ["Homzmart", "Jumia"]:
+        if self.platform not in ["Homzmart", "Jumia", "Noon"]:
             self.order_value = None
             return
 
@@ -586,6 +587,16 @@ PLATFORM_EXCEL_MAPPINGS = {
         "status_value": "pending",
         "default_quantity": 1,
     },
+    "Noon": {
+        "order_number": "purchase_item_nr",
+        "purchase_date": "order_received_at",
+        "customer_name": "Receiver Legal Name",
+        "platform_sku": "sku",
+        "quantity": "quantity",
+        "unit_price": "offer_price",
+        "status_filter": "order_status",
+        "status_value": "pending",
+    },
 }
 
 
@@ -616,6 +627,11 @@ PLATFORM_DETECTION_PATTERNS = {
         "optional_columns": ["Created At", "Unit Price", "Customer First Name", "Customer Last Name", "Shipping City", "Shipping Address", "Status"],
         "min_match": 2,
     },
+    "Noon": {
+        "required_columns": ["purchase_item_nr", "sku"],
+        "optional_columns": ["order_received_at", "offer_price", "quantity", "order_status", "Receiver Legal Name"],
+        "min_match": 2,
+    },
 }
 
 
@@ -641,11 +657,12 @@ def get_excel_value(row, platform, field_name):
         if default_value is not None:
             return default_value
 
-    # # Special handling for Noon's order_number (purchase_item_nr): Remove -P1, -P2, etc. suffix
-    # if platform == "Noon" and field_name == "order_number" and value:
-    #     value = str(value).strip()
-    #     # Remove -Pn suffix (where n is one or more digits)
-    #     value = re.sub(r'-P\d+$', '', value)
+    # Special handling for Noon's order_number (purchase_item_nr): Remove -P1, -P2, etc. suffix
+    # Example: NEGI10032825827-1-P1 becomes NEGI10032825827-1
+    if platform == "Noon" and field_name == "order_number" and value:
+        value = str(value).strip()
+        # Remove -Pn suffix at the end (where n is one or more digits)
+        value = re.sub(r'-P\d+$', '', value)
 
     return value
 
@@ -1018,6 +1035,22 @@ def import_platform_orders_from_excel(data, platform_order_name):
 
         # Set Jumia-specific fields before saving
         if platform == "Jumia":
+            # Internal fields (from marketplace listing or calculated)
+            if commission_percent:
+                doc.commission_percent = commission_percent
+            if commission_value:
+                doc.commission_value = commission_value
+
+            # Empty fields (not from Excel, not calculated) - manual entry only
+            doc.subsidy = 0
+            doc.shipping_collection = 0
+            doc.cod_collection = 0
+            doc.cod_fees = 0
+            doc.cash_collection = 0
+            doc.adjustment = 0
+
+        # Set Noon-specific fields before saving
+        if platform == "Noon":
             # Internal fields (from marketplace listing or calculated)
             if commission_percent:
                 doc.commission_percent = commission_percent
@@ -1650,6 +1683,25 @@ def bulk_import_platform_orders_from_excel(data):
                             doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
                             frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
 
+                # Set Noon-specific fields
+                if order_data["platform"] == "Noon":
+                    frappe.logger().info(f"Setting Noon-specific fields")
+                    # Empty fields (not from Excel, not calculated) - manual entry only
+                    doc.subsidy = 0
+                    doc.shipping_collection = 0
+                    doc.cod_collection = 0
+                    doc.cod_fees = 0
+                    doc.cash_collection = 0
+                    doc.adjustment = 0
+
+                    # Commission from first item (from marketplace listing)
+                    if first_item and first_item.get("commission"):
+                        frappe.logger().info(f"Setting commission_percent: {first_item['commission']}")
+                        doc.commission_percent = first_item["commission"]
+                        if doc.commission_percent and doc.unit_price:
+                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
+                            frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
+
                 # Add matched items
                 for item in matched_items:
                     doc.append(
@@ -1768,279 +1820,270 @@ def bulk_import_platform_orders_from_excel(data):
         return {"success": False, "message": str(e)}
 
 
-# @frappe.whitelist()
-# def update_prices_from_noon_excel(data):
-#     """
-#     Update unit_price for Noon Platform Orders from price Excel
-#
-#     Args:
-#         data: JSON string with rows containing [item_nr, offer_price, status]
-#
-#     Returns:
-#         dict: Update results with summary and details
-#     """
-#     try:
-#         import json
-#
-#         if isinstance(data, str):
-#             data = json.loads(data)
-#
-#         results = {
-#             "updated_items": [],
-#             "skipped_items": [],
-#             "not_found": [],
-#             "errors": [],
-#             "summary": {}
-#         }
-#
-#         processing_rows = 0
-#
-#         for row_idx, row in enumerate(data, start=2):
-#             # Extract columns
-#             status = str(row.get("status", "")).strip().lower()
-#             item_nr = str(row.get("item_nr", "")).strip()
-#             offer_price = row.get("offer_price")
-#
-#             # Filter by status
-#             if status != "processing":
-#                 continue
-#
-#             processing_rows += 1
-#
-#             # Validate offer_price
-#             try:
-#                 offer_price = float(offer_price)
-#             except (ValueError, TypeError):
-#                 results["errors"].append({
-#                     "row": row_idx,
-#                     "item_nr": item_nr,
-#                     "error": f"Invalid offer_price: {offer_price}"
-#                 })
-#                 continue
-#
-#             # Find Platform Orders with matching order_number
-#             platform_orders = frappe.get_all(
-#                 "Platform Order",
-#                 filters={
-#                     "order_number": item_nr,
-#                     "platform": "Noon"
-#                 },
-#                 fields=["name", "docstatus"]
-#             )
-#
-#             if not platform_orders:
-#                 results["not_found"].append({
-#                     "row": row_idx,
-#                     "item_nr": item_nr
-#                 })
-#                 continue
-#
-#             # Update each matching order
-#             for po in platform_orders:
-#                 # Skip submitted orders
-#                 if po.docstatus == 1:
-#                     results["skipped_items"].append({
-#                         "row": row_idx,
-#                         "item_nr": item_nr,
-#                         "order": po.name,
-#                         "reason": "Order is submitted - cannot modify"
-#                     })
-#                     continue
-#
-#                 try:
-#                     doc = frappe.get_doc("Platform Order", po.name)
-#                     updated_count = 0
-#
-#                     # Update matched items
-#                     for item in doc.items:
-#                         if item.unit_price in [None, 0, 0.0]:
-#                             old_price = item.unit_price or 0
-#                             item.unit_price = offer_price
-#                             updated_count += 1
-#                             results["updated_items"].append({
-#                                 "row": row_idx,
-#                                 "order": doc.name,
-#                                 "item_nr": item_nr,
-#                                 "item_code": item.item_code,
-#                                 "old_price": old_price,
-#                                 "new_price": offer_price
-#                             })
-#                         else:
-#                             results["skipped_items"].append({
-#                                 "row": row_idx,
-#                                 "order": doc.name,
-#                                 "item_nr": item_nr,
-#                                 "item_code": item.item_code,
-#                                 "reason": f"Price already set ({item.unit_price})",
-#                                 "current_price": item.unit_price
-#                             })
-#
-#                     # Update unmatched items
-#                     for item in doc.unmatched_items:
-#                         if item.unit_price in [None, 0, 0.0]:
-#                             old_price = item.unit_price or 0
-#                             item.unit_price = offer_price
-#                             updated_count += 1
-#                             results["updated_items"].append({
-#                                 "row": row_idx,
-#                                 "order": doc.name,
-#                                 "item_nr": item_nr,
-#                                 "platform_sku": item.platform_sku,
-#                                 "old_price": old_price,
-#                                 "new_price": offer_price
-#                             })
-#                         else:
-#                             results["skipped_items"].append({
-#                                 "row": row_idx,
-#                                 "order": doc.name,
-#                                 "item_nr": item_nr,
-#                                 "platform_sku": item.platform_sku,
-#                                 "reason": f"Price already set ({item.unit_price})",
-#                                 "current_price": item.unit_price
-#                             })
-#
-#                     # Save if any items were updated
-#                     if updated_count > 0:
-#                         doc.save()
-#
-#                 except Exception as e:
-#                     results["errors"].append({
-#                         "row": row_idx,
-#                         "item_nr": item_nr,
-#                         "order": po.name,
-#                         "error": str(e)
-#                     })
-#                     frappe.db.rollback()
-#
-#         # Build summary
-#         results["summary"] = {
-#             "total_rows": len(data),
-#             "processing_rows": processing_rows,
-#             "orders_updated": len(set(item["order"] for item in results["updated_items"])),
-#             "items_updated": len(results["updated_items"]),
-#             "items_skipped": len(results["skipped_items"]),
-#             "not_found": len(results["not_found"]),
-#             "errors": len(results["errors"])
-#         }
-#
-#         return {"success": True, "results": results}
-#
-#     except Exception as e:
-#         frappe.log_error(title="Noon Price Update", message=f"Fatal Error: {str(e)}")
-#         return {"success": False, "message": str(e)}
+@frappe.whitelist()
+def update_prices_from_noon_excel(data):
+    """
+    Update unit_price for Noon Platform Orders from price Excel
+
+    Args:
+        data: JSON string with rows containing [item_nr, offer_price, status]
+
+    Returns:
+        dict: Update results with summary and details
+    """
+    try:
+        import json
+
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        results = {
+            "updated_items": [],
+            "skipped_items": [],
+            "not_found": [],
+            "errors": [],
+            "summary": {}
+        }
+
+        processing_rows = 0
+
+        for row_idx, row in enumerate(data, start=2):
+            # Extract columns
+            status = str(row.get("status", "")).strip().lower()
+            item_nr = str(row.get("item_nr", "")).strip()
+            offer_price = row.get("offer_price")
+
+            # Skip rows without item_nr
+            if not item_nr:
+                continue
+
+            # Remove -Pn suffix from item_nr (same as order_number)
+            # Example: NEGI10032825827-1-P1 becomes NEGI10032825827-1
+            item_nr = re.sub(r'-P\d+$', '', item_nr)
+
+            # Filter by status if status column exists
+            if status and status != "processing":
+                continue
+
+            processing_rows += 1
+
+            # Validate offer_price
+            try:
+                offer_price = float(offer_price)
+            except (ValueError, TypeError):
+                results["errors"].append({
+                    "row": row_idx,
+                    "item_nr": item_nr,
+                    "error": f"Invalid offer_price: {offer_price}"
+                })
+                continue
+
+            # Find Platform Orders with matching order_number
+            platform_orders = frappe.get_all(
+                "Platform Order",
+                filters={
+                    "order_number": item_nr,
+                    "platform": "Noon"
+                },
+                fields=["name", "docstatus"]
+            )
+
+            if not platform_orders:
+                results["not_found"].append({
+                    "row": row_idx,
+                    "item_nr": item_nr
+                })
+                continue
+
+            # Update each matching order
+            for po in platform_orders:
+                # Skip submitted orders
+                if po.docstatus == 1:
+                    results["skipped_items"].append({
+                        "row": row_idx,
+                        "item_nr": item_nr,
+                        "order": po.name,
+                        "reason": "Order is submitted - cannot modify"
+                    })
+                    continue
+
+                try:
+                    doc = frappe.get_doc("Platform Order", po.name)
+                    updated_count = 0
+
+                    # Update unit_price in parent document
+                    old_price = doc.unit_price or 0
+                    doc.unit_price = offer_price
+                    updated_count += 1
+
+                    # Update matched items
+                    for item in doc.items:
+                        if item.is_matched:
+                            old_item_price = item.unit_price or 0
+                            item.unit_price = offer_price
+                            results["updated_items"].append({
+                                "row": row_idx,
+                                "order": doc.name,
+                                "item_nr": item_nr,
+                                "item_code": item.item_code,
+                                "old_price": old_item_price,
+                                "new_price": offer_price
+                            })
+                        else:
+                            # Unmatched items
+                            old_item_price = item.unit_price or 0
+                            item.unit_price = offer_price
+                            results["updated_items"].append({
+                                "row": row_idx,
+                                "order": doc.name,
+                                "item_nr": item_nr,
+                                "platform_sku": item.platform_sku,
+                                "old_price": old_item_price,
+                                "new_price": offer_price
+                            })
+
+                    # Save if any items were updated
+                    if updated_count > 0:
+                        doc.save()
+
+                except Exception as e:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "item_nr": item_nr,
+                        "order": po.name,
+                        "error": str(e)
+                    })
+                    frappe.db.rollback()
+
+        # Build summary
+        results["summary"] = {
+            "total_rows": len(data),
+            "processing_rows": processing_rows,
+            "orders_updated": len(set(item["order"] for item in results["updated_items"])),
+            "items_updated": len(results["updated_items"]),
+            "items_skipped": len(results["skipped_items"]),
+            "not_found": len(results["not_found"]),
+            "errors": len(results["errors"])
+        }
+
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        frappe.log_error(title="Noon Price Update", message=f"Fatal Error: {str(e)}")
+        return {"success": False, "message": str(e)}
 
 
-# @frappe.whitelist()
-# def update_customer_names_from_noon_excel(data):
-#     """
-#     Update customer_name for Noon Platform Orders from customer name Excel
-#
-#     Args:
-#         data: JSON string with rows containing [Source Doc Line Nr, Receiver Legal Entity]
-#
-#     Returns:
-#         dict: Update results with summary and details
-#     """
-#     try:
-#         import json
-#         import re
-#
-#         if isinstance(data, str):
-#             data = json.loads(data)
-#
-#         results = {
-#             "updated_orders": [],
-#             "not_found": [],
-#             "errors": [],
-#             "summary": {}
-#         }
-#
-#         for row_idx, row in enumerate(data, start=2):
-#             # Extract columns (check both possible column names)
-#             source_doc_line_nr = str(row.get("Source Doc Line Nr", "")).strip()
-#             receiver_legal_entity = str(row.get("Receiver Legal Entity", "") or row.get("Receiver Legal Name", "")).strip()
-#
-#             if not source_doc_line_nr:
-#                 continue
-#
-#             # Remove -Pn suffix (same logic as purchase_item_nr)
-#             order_number = re.sub(r'-P\d+$', '', source_doc_line_nr)
-#
-#             if not receiver_legal_entity:
-#                 results["errors"].append({
-#                     "row": row_idx,
-#                     "order_number": order_number,
-#                     "error": "Receiver Legal Entity is empty"
-#                 })
-#                 continue
-#
-#             # Find Platform Orders with matching order_number
-#             platform_orders = frappe.get_all(
-#                 "Platform Order",
-#                 filters={
-#                     "order_number": order_number,
-#                     "platform": "Noon"
-#                 },
-#                 fields=["name", "docstatus", "customer_name"]
-#             )
-#
-#             if not platform_orders:
-#                 results["not_found"].append({
-#                     "row": row_idx,
-#                     "order_number": order_number
-#                 })
-#                 continue
-#
-#             # Update each matching order
-#             for po in platform_orders:
-#                 # Skip submitted orders
-#                 if po.docstatus == 1:
-#                     results["errors"].append({
-#                         "row": row_idx,
-#                         "order_number": order_number,
-#                         "order": po.name,
-#                         "error": "Order is submitted - cannot modify"
-#                     })
-#                     continue
-#
-#                 try:
-#                     doc = frappe.get_doc("Platform Order", po.name)
-#                     old_customer_name = doc.customer_name or ""
-#
-#                     # Update customer_name
-#                     doc.customer_name = receiver_legal_entity
-#                     doc.save()
-#
-#                     results["updated_orders"].append({
-#                         "row": row_idx,
-#                         "order": doc.name,
-#                         "order_number": order_number,
-#                         "old_customer_name": old_customer_name,
-#                         "new_customer_name": receiver_legal_entity
-#                     })
-#
-#                 except Exception as e:
-#                     results["errors"].append({
-#                         "row": row_idx,
-#                         "order_number": order_number,
-#                         "order": po.name,
-#                         "error": str(e)
-#                     })
-#                     frappe.db.rollback()
-#
-#         # Build summary
-#         results["summary"] = {
-#             "total_rows": len(data),
-#             "orders_updated": len(results["updated_orders"]),
-#             "not_found": len(results["not_found"]),
-#             "errors": len(results["errors"])
-#         }
-#
-#         return {"success": True, "results": results}
-#
-#     except Exception as e:
-#         frappe.log_error(title="Noon Customer Name Update", message=f"Fatal Error: {str(e)}")
-#         return {"success": False, "message": str(e)}
+@frappe.whitelist()
+def update_customer_names_from_noon_excel(data):
+    """
+    Update customer_name for Noon Platform Orders from customer name Excel
+
+    Args:
+        data: JSON string with rows containing [Source Doc Line Nr, Receiver Legal Name]
+
+    Returns:
+        dict: Update results with summary and details
+    """
+    try:
+        import json
+
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        results = {
+            "updated_orders": [],
+            "not_found": [],
+            "errors": [],
+            "summary": {}
+        }
+
+        for row_idx, row in enumerate(data, start=2):
+            # Extract columns
+            source_doc_line_nr = str(row.get("Source Doc Line Nr", "")).strip()
+            receiver_legal_name = str(row.get("Receiver Legal Name", "") or row.get("Receiver Legal Entity", "")).strip()
+
+            if not source_doc_line_nr:
+                continue
+
+            # Remove -Pn suffix (same logic as purchase_item_nr)
+            # Example: NEGI10047460871-3-P1 becomes NEGI10047460871-3
+            order_number = re.sub(r'-P\d+$', '', source_doc_line_nr)
+
+            if not receiver_legal_name:
+                results["errors"].append({
+                    "row": row_idx,
+                    "order_number": order_number,
+                    "error": "Receiver Legal Name is empty"
+                })
+                continue
+
+            # Find Platform Orders with matching order_number
+            platform_orders = frappe.get_all(
+                "Platform Order",
+                filters={
+                    "order_number": order_number,
+                    "platform": "Noon"
+                },
+                fields=["name", "docstatus", "customer_name"]
+            )
+
+            if not platform_orders:
+                results["not_found"].append({
+                    "row": row_idx,
+                    "order_number": order_number
+                })
+                continue
+
+            # Update each matching order
+            for po in platform_orders:
+                # Skip submitted orders
+                if po.docstatus == 1:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "order_number": order_number,
+                        "order": po.name,
+                        "error": "Order is submitted - cannot modify"
+                    })
+                    continue
+
+                try:
+                    doc = frappe.get_doc("Platform Order", po.name)
+                    old_customer_name = doc.customer_name or ""
+
+                    # Update customer_name
+                    doc.customer_name = receiver_legal_name
+                    doc.save()
+
+                    results["updated_orders"].append({
+                        "row": row_idx,
+                        "order": doc.name,
+                        "order_number": order_number,
+                        "old_customer_name": old_customer_name,
+                        "new_customer_name": receiver_legal_name
+                    })
+
+                except Exception as e:
+                    results["errors"].append({
+                        "row": row_idx,
+                        "order_number": order_number,
+                        "order": po.name,
+                        "error": str(e)
+                    })
+                    frappe.db.rollback()
+
+        # Build summary
+        results["summary"] = {
+            "total_rows": len(data),
+            "orders_updated": len(results["updated_orders"]),
+            "not_found": len(results["not_found"]),
+            "errors": len(results["errors"])
+        }
+
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        frappe.log_error(title="Noon Customer Name Update", message=f"Fatal Error: {str(e)}")
+        return {"success": False, "message": str(e)}
 
 
 @frappe.whitelist()
@@ -2081,83 +2124,83 @@ def process_multi_sheet_excel(sheets_data):
         first_row = data[0]
         column_headers = list(first_row.keys())
 
-        # # First check if it's a Noon price update
-        # noon_import_type = detect_noon_import_type(column_headers)
-        #
-        # if noon_import_type == "price_update":
-        #     # Route to price update handler
-        #     try:
-        #         update_result = update_prices_from_noon_excel(data)
-        #
-        #         if update_result.get("success"):
-        #             res = update_result["results"]
-        #             results["sheets_processed"] += 1
-        #             results["sheet_results"].append({
-        #                 "sheet_name": sheet_name,
-        #                 "import_type": "price_update",
-        #                 "platform": "Noon",
-        #                 "items_updated": res["summary"]["items_updated"],
-        #                 "items_skipped": res["summary"]["items_skipped"],
-        #                 "not_found": res["summary"]["not_found"],
-        #                 "warnings": res.get("errors", [])
-        #             })
-        #         else:
-        #             results["sheets_skipped"] += 1
-        #             results["errors"].append({
-        #                 "sheet": sheet_name,
-        #                 "import_type": "price_update",
-        #                 "error": update_result.get("message", "Unknown error")
-        #             })
-        #
-        #     except Exception as e:
-        #         results["sheets_skipped"] += 1
-        #         results["errors"].append({
-        #             "sheet": sheet_name,
-        #             "import_type": "price_update",
-        #             "error": str(e)
-        #         })
-        #         frappe.log_error(
-        #             f"Price update failed for {sheet_name}: {str(e)}",
-        #             "Noon Price Update Error"
-        #         )
-        #     continue
-        #
-        # if noon_import_type == "customer_name_update":
-        #     # Route to customer name update handler
-        #     try:
-        #         update_result = update_customer_names_from_noon_excel(data)
-        #
-        #         if update_result.get("success"):
-        #             res = update_result["results"]
-        #             results["sheets_processed"] += 1
-        #             results["sheet_results"].append({
-        #                 "sheet_name": sheet_name,
-        #                 "import_type": "customer_name_update",
-        #                 "platform": "Noon",
-        #                 "orders_updated": res["summary"]["orders_updated"],
-        #                 "not_found": res["summary"]["not_found"],
-        #                 "warnings": res.get("errors", [])
-        #             })
-        #         else:
-        #             results["sheets_skipped"] += 1
-        #             results["errors"].append({
-        #                 "sheet": sheet_name,
-        #                 "import_type": "customer_name_update",
-        #                 "error": update_result.get("message", "Unknown error")
-        #             })
-        #
-        #     except Exception as e:
-        #         results["sheets_skipped"] += 1
-        #         results["errors"].append({
-        #             "sheet": sheet_name,
-        #             "import_type": "customer_name_update",
-        #             "error": str(e)
-        #         })
-        #         frappe.log_error(
-        #             f"Customer name update failed for {sheet_name}: {str(e)}",
-        #             "Noon Customer Name Update Error"
-        #         )
-        #     continue
+        # Check if it's a Noon price update sheet (has item_nr and offer_price columns)
+        if "item_nr" in column_headers and "offer_price" in column_headers:
+            # Route to price update handler
+            try:
+                update_result = update_prices_from_noon_excel(data)
+
+                if update_result.get("success"):
+                    res = update_result["results"]
+                    results["sheets_processed"] += 1
+                    results["sheet_results"].append({
+                        "sheet_name": sheet_name,
+                        "import_type": "price_update",
+                        "platform": "Noon",
+                        "items_updated": res["summary"]["items_updated"],
+                        "items_skipped": res["summary"]["items_skipped"],
+                        "not_found": res["summary"]["not_found"],
+                        "warnings": res.get("errors", [])
+                    })
+                else:
+                    results["sheets_skipped"] += 1
+                    results["errors"].append({
+                        "sheet": sheet_name,
+                        "import_type": "price_update",
+                        "error": update_result.get("message", "Unknown error")
+                    })
+
+            except Exception as e:
+                results["sheets_skipped"] += 1
+                results["errors"].append({
+                    "sheet": sheet_name,
+                    "import_type": "price_update",
+                    "error": str(e)
+                })
+                frappe.log_error(
+                    f"Price update failed for {sheet_name}: {str(e)}",
+                    "Noon Price Update Error"
+                )
+            continue
+
+        # Check if it's a customer name update sheet
+        # Customer name update sheets have "Source Doc Line Nr" and "Receiver Legal Name"
+        if "Source Doc Line Nr" in column_headers or "source doc line nr" in [h.lower() for h in column_headers]:
+            # Route to customer name update handler
+            try:
+                update_result = update_customer_names_from_noon_excel(data)
+
+                if update_result.get("success"):
+                    res = update_result["results"]
+                    results["sheets_processed"] += 1
+                    results["sheet_results"].append({
+                        "sheet_name": sheet_name,
+                        "import_type": "customer_name_update",
+                        "platform": "Noon",
+                        "orders_updated": res["summary"]["orders_updated"],
+                        "not_found": res["summary"]["not_found"],
+                        "warnings": res.get("errors", [])
+                    })
+                else:
+                    results["sheets_skipped"] += 1
+                    results["errors"].append({
+                        "sheet": sheet_name,
+                        "import_type": "customer_name_update",
+                        "error": update_result.get("message", "Unknown error")
+                    })
+
+            except Exception as e:
+                results["sheets_skipped"] += 1
+                results["errors"].append({
+                    "sheet": sheet_name,
+                    "import_type": "customer_name_update",
+                    "error": str(e)
+                })
+                frappe.log_error(
+                    f"Customer name update failed for {sheet_name}: {str(e)}",
+                    "Noon Customer Name Update Error"
+                )
+            continue
 
         # Existing platform detection for order import
         detected_platform = detect_platform_from_columns(column_headers)

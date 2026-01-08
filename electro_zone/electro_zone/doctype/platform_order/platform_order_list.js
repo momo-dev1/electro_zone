@@ -155,7 +155,7 @@ function show_bulk_import_dialog(listview) {
 				label: __("Excel File"),
 				reqd: 1,
 				description: __(
-					"<div>Upload Excel file with columns: Platform, Platform Date, Order Number, Asin/Sku, Quantity, Unit Price, Total Price</div>"
+					"<div>Kindly upload only the Excel file in the required format</div>"
 				),
 				onchange: function () {
 					let file_url = d.get_value("excel_file");
@@ -216,6 +216,22 @@ function show_bulk_import_dialog(listview) {
 	});
 
 	d.show();
+
+	// Center the Excel File field
+	d.$wrapper.find('[data-fieldname="excel_file"]').css({
+		"flex-direction": "column",
+		"align-items": "center",
+		"text-align": "center",
+		"margin-bottom": "10px",
+	});
+	d.$wrapper.find('[data-fieldname="excel_file"] .control-label').css({
+		width: "100%",
+		"text-align": "center",
+		"margin-bottom": "10px",
+	});
+	d.$wrapper.find('[data-fieldname="excel_file"] .form-control').css({
+		margin: "0 auto",
+	});
 
 	// Load SheetJS library
 	load_sheetjs_library();
@@ -342,34 +358,43 @@ function show_multi_sheet_preview(sheets_data, dialog) {
 
 		// Detect platform or import type from columns (preview only)
 		const first_row = sheet_info.data[0];
-		const columns = Object.keys(first_row).map(c => c.toLowerCase().trim());
+		const columns = Object.keys(first_row).map((c) => c.toLowerCase().trim());
 		let detected_platform = "Unknown";
 		let import_type = "order_import";
 
 		// Check for Noon customer name update format
-		const has_source_doc = columns.some(c => c.includes("source doc line nr") || c === "source doc line nr");
-		const has_receiver = columns.some(c => c.includes("receiver legal entity") || c === "receiver legal entity" || c.includes("receiver legal name") || c === "receiver legal name");
+		const has_source_doc = columns.some(
+			(c) => c.includes("source doc line nr") || c === "source doc line nr"
+		);
+		const has_receiver = columns.some(
+			(c) =>
+				c.includes("receiver legal entity") ||
+				c === "receiver legal entity" ||
+				c.includes("receiver legal name") ||
+				c === "receiver legal name"
+		);
 
 		if (has_source_doc && has_receiver) {
 			detected_platform = "Noon";
 			import_type = "customer_name_update";
 		}
 		// Check for Noon price update format
-		else if (columns.includes("item_nr") && columns.includes("offer_price") && columns.includes("status")) {
+		else if (
+			columns.includes("item_nr") &&
+			columns.includes("offer_price") &&
+			columns.includes("status")
+		) {
 			detected_platform = "Noon";
 			import_type = "price_update";
 		}
 		// Simple detection logic for order imports (matches backend)
 		else if (columns.includes("amazon-order-id")) {
 			detected_platform = "Amazon";
-		}
-		else if (columns.includes("order_nr") || columns.includes("purchase_item_nr")) {
+		} else if (columns.includes("order_nr") || columns.includes("purchase_item_nr")) {
 			detected_platform = "Noon";
-		}
-		else if (columns.includes("sku") && columns.includes("order number")) {
+		} else if (columns.includes("sku") && columns.includes("order number")) {
 			detected_platform = "Jumia";
-		}
-		else if (columns.includes("itemid") && columns.includes("itemsku")) {
+		} else if (columns.includes("itemid") && columns.includes("itemsku")) {
 			detected_platform = "Homzmart";
 		}
 
