@@ -37,7 +37,6 @@
         "adjustment",
         "order_value",
         "section_break_tracking",
-        "upload_file",
         "ready_to_ship_date",
         "shipped_date",
         "delivery_note",
@@ -223,11 +222,6 @@
             "fieldname": "section_break_tracking",
             "fieldtype": "Section Break",
             "label": "Tracking"
-        },
-        {
-            "fieldname": "upload_file",
-            "fieldtype": "Attach",
-            "label": "Upload File"
         },
         {
             "fieldname": "ready_to_ship_date",

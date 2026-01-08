@@ -23,8 +23,8 @@ class PlatformOrder(Document):
         # Calculate totals
         self.calculate_totals()
 
-        # Calculate order value for Homzmart, Jumia, and Noon
-        if self.platform in ["Homzmart", "Jumia", "Noon"]:
+        # Calculate order value for Amazon, Homzmart, Jumia, and Noon
+        if self.platform in ["Amazon", "Homzmart", "Jumia", "Noon"]:
             self.calculate_order_value()
 
         # Update match status
@@ -53,13 +53,13 @@ class PlatformOrder(Document):
 
     def calculate_order_value(self):
         """
-        Calculate order_value for Homzmart, Jumia, and Noon platforms
+        Calculate order_value for Amazon, Homzmart, Jumia, and Noon platforms
 
         Formula per homz.md/plat.md line 28:
         = Unit Price + Shipping Collection - Commission Value + COD Collection
           - COD Fees - Shipping Fees + Subsidy + Adjustment
         """
-        if self.platform not in ["Homzmart", "Jumia", "Noon"]:
+        if self.platform not in ["Amazon", "Homzmart", "Jumia", "Noon"]:
             self.order_value = None
             return
 
@@ -521,18 +521,21 @@ def match_unmatched_item(platform_order, unmatched_item_row_name, item_code):
 
 # Platform-specific Excel column mappings
 PLATFORM_EXCEL_MAPPINGS = {
-    # "Amazon": {
-    #     "order_number": "amazon-order-id",
-    #     "platform_date": "purchase-date",
-    #     "platform_sku": "asin",
-    #     "quantity": "quantity",
-    #     "unit_price": "item-price",
-    #     "shipping_price": "shipping-price",
-    #     "ship_promotion_discount": "ship-promotion-discount",
-    #     "status_filter": None,
-    #     "status_value": None,
-    #     "default_qty": None,
-    # },
+    "Amazon": {
+        "order_number": "amazon-order-id",
+        "purchase_date": "purchase-date",
+        "platform_sku": "asin",
+        "quantity": "quantity",
+        "unit_price": "item-price",
+        "shipping_price": "shipping-price",
+        "ship_promotion_discount": "ship-promotion-discount",
+        "city": "ship-state",
+        "region": "ship-city",
+        "fulfillment_channel": "fulfillment-channel",
+        "status_filter": None,
+        "status_value": None,
+        "default_quantity": None,
+    },
     # "Noon": {
     #     "order_number": "purchase_item_nr",
     #     "platform_date": "fulfillment_timestamp",
@@ -602,11 +605,11 @@ PLATFORM_EXCEL_MAPPINGS = {
 
 # Platform detection patterns - unique columns that identify each platform
 PLATFORM_DETECTION_PATTERNS = {
-    # "Amazon": {
-    #     "required_columns": ["amazon-order-id", "asin"],  # Must have these
-    #     "optional_columns": ["item-price", "shipping-price", "ship-promotion-discount", "purchase-date", "quantity"],  # Nice to have
-    #     "min_match": 2,  # Need at least 2 columns to confirm
-    # },
+    "Amazon": {
+        "required_columns": ["amazon-order-id", "asin"],
+        "optional_columns": ["item-price", "shipping-price", "ship-promotion-discount", "purchase-date", "quantity", "fulfillment-channel"],
+        "min_match": 2,
+    },
     # "Noon": {
     #     "required_columns": ["order_nr", "sku"],
     #     "optional_columns": ["fulfillment_timestamp", "order_status"],
@@ -681,17 +684,14 @@ def calculate_shipping_fees(row, platform):
     Returns:
         float: Calculated shipping fees
     """
-    # if platform == "Amazon":
-    #     # For Amazon: shipping_fees = shipping-price - ship-promotion-discount
-    #     shipping_price = float(get_excel_value(row, platform, "shipping_price") or 0)
-    #     ship_promotion_discount = float(get_excel_value(row, platform, "ship_promotion_discount") or 0)
-    #     return shipping_price - ship_promotion_discount
-    # else:
-    #     # For other platforms: use direct shipping_fees mapping
-    #     return float(get_excel_value(row, platform, "shipping_fees") or 0)
-
-    # For Homzmart: use direct shipping_fees mapping
-    return float(get_excel_value(row, platform, "shipping_fees") or 0)
+    if platform == "Amazon":
+        # For Amazon: shipping_fees = shipping-price - ship-promotion-discount
+        shipping_price = float(get_excel_value(row, platform, "shipping_price") or 0)
+        ship_promotion_discount = float(get_excel_value(row, platform, "ship_promotion_discount") or 0)
+        return shipping_price - ship_promotion_discount
+    else:
+        # For other platforms: use direct shipping_fees mapping
+        return float(get_excel_value(row, platform, "shipping_fees") or 0)
 
 
 def should_import_row(row, platform):
@@ -1134,17 +1134,27 @@ def validate_item_has_marketplace_listing(item_code, platform, platform_sku):
     return result[0].count > 0 if result else False
 
 
-def get_item_from_marketplace_listing(platform, platform_sku):
+def get_item_from_marketplace_listing(platform, platform_sku, fulfillment_channel=None):
     """
     Get Item Code from latest Marketplace Listing for platform+ASIN combination
 
     Args:
         platform: Platform name (Amazon, Noon, etc.)
         platform_sku: ASIN/SKU to lookup
+        fulfillment_channel: Optional fulfillment channel (for Amazon: 'Amazon' for FBA maps to Platform='Amazon', 'Merchant' for MFN maps to Platform='Merchant')
 
     Returns:
         dict: Item data (name, custom_item_model, description) or None if not found
     """
+    # Map fulfillment channel to marketplace platform
+    marketplace_platform = platform
+    if platform == "Amazon" and fulfillment_channel:
+        if fulfillment_channel == "Amazon":
+            marketplace_platform = "Amazon"  # FBA orders match to Platform="Amazon"
+        elif fulfillment_channel == "Merchant":
+            marketplace_platform = "Merchant"  # Merchant orders match to Platform="Merchant"
+        # If fulfillment_channel is None or empty, use "Amazon" as default
+
     sql = """
         SELECT mpl.item_code as name,
                i.custom_item_model,
@@ -1160,21 +1170,30 @@ def get_item_from_marketplace_listing(platform, platform_sku):
         ORDER BY mpl.effective_date DESC, mpl.creation DESC
         LIMIT 1
     """
-    result = frappe.db.sql(sql, {"platform": platform, "platform_sku": platform_sku}, as_dict=True)
+    result = frappe.db.sql(sql, {"platform": marketplace_platform, "platform_sku": platform_sku}, as_dict=True)
     return result[0] if result else None
 
 
-def get_commission_and_shipping_from_marketplace_listing(platform, platform_sku):
+def get_commission_and_shipping_from_marketplace_listing(platform, platform_sku, fulfillment_channel=None):
     """
     Get commission and shipping fee from latest Marketplace Listing Detail
 
     Args:
         platform: Platform name (Amazon, Noon, Jumia, B-tech, Homzmart)
         platform_sku: ASIN/SKU to lookup
+        fulfillment_channel: Optional fulfillment channel (for Amazon: 'Amazon' for FBA maps to Platform='Amazon', 'Merchant' for MFN maps to Platform='Merchant')
 
     Returns:
         dict: {'commission_percent': float, 'shipping_fee': float} or None values if not found
     """
+    # Map fulfillment channel to marketplace platform
+    marketplace_platform = platform
+    if platform == "Amazon" and fulfillment_channel:
+        if fulfillment_channel == "Amazon":
+            marketplace_platform = "Amazon"  # FBA orders match to Platform="Amazon"
+        elif fulfillment_channel == "Merchant":
+            marketplace_platform = "Merchant"  # Merchant orders match to Platform="Merchant"
+
     sql = """
         SELECT mpld.commission as commission_percent,
                mpld.shipping_fee
@@ -1187,7 +1206,7 @@ def get_commission_and_shipping_from_marketplace_listing(platform, platform_sku)
         ORDER BY mpl.effective_date DESC, mpl.creation DESC
         LIMIT 1
     """
-    result = frappe.db.sql(sql, {"platform": platform, "platform_sku": platform_sku}, as_dict=True)
+    result = frappe.db.sql(sql, {"platform": marketplace_platform, "platform_sku": platform_sku}, as_dict=True)
 
     if result:
         return {
@@ -1371,6 +1390,7 @@ def bulk_import_platform_orders_from_excel(data):
                 "address": None,  # FIXED: field is address
                 "city": None,
                 "region": None,
+                "fulfillment_channel": None,  # For Amazon FBA/Merchant distinction
                 "shipping_collection": None,
                 "cod_collection": None,
                 "cash_collection": None,
@@ -1465,6 +1485,21 @@ def bulk_import_platform_orders_from_excel(data):
                 if cash_collection:
                     orders_data[order_key]["cash_collection"] = cash_collection
 
+                # Extract Amazon-specific fields
+                if platform == "Amazon":
+                    # Extract fulfillment channel
+                    fulfillment_channel_raw = get_excel_value(row, platform, "fulfillment_channel")
+                    if fulfillment_channel_raw:
+                        fulfillment_channel = str(fulfillment_channel_raw).strip()
+                        # Store fulfillment channel if not already set (first row wins)
+                        if not orders_data[order_key]["fulfillment_channel"]:
+                            orders_data[order_key]["fulfillment_channel"] = fulfillment_channel
+
+                    # Calculate shipping_collection from shipping-price and ship-promotion-discount
+                    shipping_collection = calculate_shipping_fees(row, platform)
+                    if shipping_collection:
+                        orders_data[order_key]["shipping_collection"] = shipping_collection
+
             # Extract item data with platform-specific mappings
             platform_sku = get_excel_value(row, platform, "platform_sku") or str(row.get("Platform SKU", "")).strip()
             quantity = float(get_excel_value(row, platform, "quantity") or row.get("Quantity", 0))
@@ -1480,15 +1515,22 @@ def bulk_import_platform_orders_from_excel(data):
                 )
                 continue
 
-            # Find Item from Marketplace Listing by Platform + SKU
-            item = get_item_from_marketplace_listing(platform, platform_sku) if platform else None
+            # Find Item from Marketplace Listing by Platform + SKU + Fulfillment Channel
+            fulfillment_channel = orders_data[order_key].get("fulfillment_channel")
+            item = get_item_from_marketplace_listing(platform, platform_sku, fulfillment_channel) if platform else None
 
             # Get commission and shipping from marketplace listing
-            commission_data = get_commission_and_shipping_from_marketplace_listing(platform, platform_sku)
+            commission_data = get_commission_and_shipping_from_marketplace_listing(platform, platform_sku, fulfillment_channel)
             commission_percent = commission_data.get("commission_percent")
             commission_value = None
             if commission_percent and unit_price:
-                commission_value = (commission_percent / 100) * unit_price
+                # Amazon commission includes shipping_collection
+                if platform == "Amazon":
+                    shipping_collection_for_calc = orders_data[order_key].get("shipping_collection") or 0
+                    commission_value = (commission_percent / 100) * unit_price + shipping_collection_for_calc
+                else:
+                    # Other platforms: commission on unit_price only
+                    commission_value = (commission_percent / 100) * unit_price
 
             # Override shipping_fees if found in marketplace listing (for Homzmart)
             if commission_data.get("shipping_fee"):
@@ -1701,6 +1743,38 @@ def bulk_import_platform_orders_from_excel(data):
                         if doc.commission_percent and doc.unit_price:
                             doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
                             frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
+
+                # Set Amazon-specific fields
+                if order_data["platform"] == "Amazon":
+                    frappe.logger().info(f"Setting Amazon-specific fields")
+
+                    # Set fulfillment channel
+                    if order_data.get("fulfillment_channel"):
+                        doc.fulfillment_channel = order_data["fulfillment_channel"]
+                        frappe.logger().info(f"Fulfillment channel: {doc.fulfillment_channel}")
+
+                    # Fields calculated or from Excel
+                    if order_data.get("shipping_collection"):
+                        doc.shipping_collection = order_data["shipping_collection"]
+                        frappe.logger().info(f"Shipping collection: {doc.shipping_collection}")
+
+                    # Internal fields (from marketplace listing or calculated)
+                    if first_item and first_item.get("commission"):
+                        doc.commission_percent = first_item["commission"]
+                        frappe.logger().info(f"Commission percent: {doc.commission_percent}")
+
+                        # Amazon commission includes shipping_collection
+                        if doc.commission_percent and doc.unit_price:
+                            shipping_collection_value = order_data.get("shipping_collection") or 0
+                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price + shipping_collection_value
+                            frappe.logger().info(f"Commission value (with shipping): {doc.commission_value}")
+
+                    # Initialize empty fields
+                    doc.subsidy = 0
+                    doc.cod_collection = 0
+                    doc.cod_fees = 0
+                    doc.cash_collection = 0
+                    doc.adjustment = 0
 
                 # Add matched items
                 for item in matched_items:
