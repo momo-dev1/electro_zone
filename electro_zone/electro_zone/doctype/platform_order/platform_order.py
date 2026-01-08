@@ -22,8 +22,8 @@ class PlatformOrder(Document):
         # Calculate totals
         self.calculate_totals()
 
-        # Calculate order value for Homzmart
-        if self.platform == "Homzmart":
+        # Calculate order value for Homzmart and Jumia
+        if self.platform in ["Homzmart", "Jumia"]:
             self.calculate_order_value()
 
         # Update match status
@@ -52,13 +52,13 @@ class PlatformOrder(Document):
 
     def calculate_order_value(self):
         """
-        Calculate order_value for Homzmart platform
+        Calculate order_value for Homzmart and Jumia platforms
 
-        Formula per homz.md line 28:
+        Formula per homz.md/plat.md line 28:
         = Unit Price + Shipping Collection - Commission Value + COD Collection
           - COD Fees - Shipping Fees + Subsidy + Adjustment
         """
-        if self.platform != "Homzmart":
+        if self.platform not in ["Homzmart", "Jumia"]:
             self.order_value = None
             return
 
@@ -572,6 +572,20 @@ PLATFORM_EXCEL_MAPPINGS = {
         "status_filter": "status",
         "status_value": "ready to ship",
     },
+    "Jumia": {
+        "order_number": "Order Number",
+        "purchase_date": "Created At",
+        "platform_sku": "Sku",
+        "quantity": "Quantity",
+        "unit_price": "Unit Price",
+        "customer_first_name": "Customer First Name",
+        "customer_last_name": "Customer Last Name",
+        "region": "Shipping City",
+        "address": "Shipping Address",
+        "status_filter": "Status",
+        "status_value": "pending",
+        "default_quantity": 1,
+    },
 }
 
 
@@ -595,6 +609,11 @@ PLATFORM_DETECTION_PATTERNS = {
     "Homzmart": {
         "required_columns": ["itemid", "itemSku"],
         "optional_columns": ["orderId", "itemQty", "itemPrice", "itemShippingFees", "itemGrandTotal", "customerName", "customerMobile", "customer_address", "customer_region", "cod_fees", "addedDate", "status"],
+        "min_match": 2,
+    },
+    "Jumia": {
+        "required_columns": ["Sku", "Order Number"],  # Case-sensitive!
+        "optional_columns": ["Created At", "Unit Price", "Customer First Name", "Customer Last Name", "Shipping City", "Shipping Address", "Status"],
         "min_match": 2,
     },
 }
@@ -842,10 +861,6 @@ def import_platform_orders_from_excel(data, platform_order_name):
             cod_collection = float(get_excel_value(row, platform, "cod_collection") or 0)
             cash_collection = float(get_excel_value(row, platform, "cash_collection") or 0)
 
-            # Internal fields (not from Excel) - set to empty/0
-            subsidy = 0
-            adjustment = 0
-
             # Convert Excel date to proper format
             purchase_date = convert_excel_date(purchase_date_raw)
 
@@ -999,6 +1014,22 @@ def import_platform_orders_from_excel(data, platform_order_name):
 
             # Empty fields (not from Excel, not calculated)
             doc.subsidy = 0
+            doc.adjustment = 0
+
+        # Set Jumia-specific fields before saving
+        if platform == "Jumia":
+            # Internal fields (from marketplace listing or calculated)
+            if commission_percent:
+                doc.commission_percent = commission_percent
+            if commission_value:
+                doc.commission_value = commission_value
+
+            # Empty fields (not from Excel, not calculated) - manual entry only
+            doc.subsidy = 0
+            doc.shipping_collection = 0
+            doc.cod_collection = 0
+            doc.cod_fees = 0
+            doc.cash_collection = 0
             doc.adjustment = 0
 
         # Save document
@@ -1198,6 +1229,73 @@ def convert_excel_date(excel_date):
             return None
 
     return None
+
+
+def deduplicate_items_by_sku(items_list):
+    """
+    Deduplicate items within an order by platform_sku.
+
+    When the same platform_sku appears multiple times:
+    - SUM: quantity
+    - KEEP from first occurrence: unit_price, shipping_fees, commission,
+                                  item_code, description, matched status, etc.
+
+    Args:
+        items_list: List of item dicts from orders_data[order_key]["items"]
+                   Format: {
+                       "row": int,
+                       "matched": bool,
+                       "platform_sku": str,
+                       "quantity": float,
+                       "unit_price": float,
+                       "shipping_fees": float,
+                       "commission": float,
+                       "total_price": float,
+                       "item_code": str (if matched),
+                       "custom_item_model": str (if matched),
+                       "description": str (if matched),
+                       "stock_available": float (if matched),
+                   }
+
+    Returns:
+        List of deduplicated item dicts with summed quantities
+
+    Edge cases handled:
+    - Empty list: Return empty list
+    - Single item: Return as-is
+    - No duplicates: Return as-is
+    - Missing platform_sku: Keep each occurrence separate (treat as unique)
+    """
+    if not items_list:
+        return []
+
+    # Track first occurrence of each platform_sku
+    sku_index = {}  # {platform_sku: (index_in_result, item_dict)}
+    result = []
+
+    for item in items_list:
+        platform_sku = item.get("platform_sku")
+
+        # Skip deduplication if no platform_sku (treat as unique)
+        if not platform_sku:
+            result.append(item.copy())
+            continue
+
+        if platform_sku not in sku_index:
+            # First occurrence: track in result and index
+            result.append(item.copy())
+            sku_index[platform_sku] = (len(result) - 1, item)
+        else:
+            # Duplicate SKU: sum quantity to first occurrence
+            first_index, _ = sku_index[platform_sku]
+            result[first_index]["quantity"] += item.get("quantity", 0)
+
+            # Track deduplication metadata
+            if "deduplicated_from" not in result[first_index]:
+                result[first_index]["deduplicated_from"] = 1
+            result[first_index]["deduplicated_from"] += 1
+
+    return result
 
 
 @frappe.whitelist()
@@ -1458,6 +1556,9 @@ def bulk_import_platform_orders_from_excel(data):
                     })
                     continue
 
+                # Deduplicate items within this order by platform_sku
+                order_data["items"] = deduplicate_items_by_sku(order_data["items"])
+
                 # Filter matched items
                 matched_items = [item for item in order_data["items"] if item.get("matched")]
                 unmatched_items = [item for item in order_data["items"] if not item.get("matched")]
@@ -1520,6 +1621,25 @@ def bulk_import_platform_orders_from_excel(data):
                     # Empty fields (not from Excel, not calculated)
                     frappe.logger().info(f"Setting subsidy and adjustment to 0")
                     doc.subsidy = 0
+                    doc.adjustment = 0
+
+                    # Commission from first item (from marketplace listing)
+                    if first_item and first_item.get("commission"):
+                        frappe.logger().info(f"Setting commission_percent: {first_item['commission']}")
+                        doc.commission_percent = first_item["commission"]
+                        if doc.commission_percent and doc.unit_price:
+                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
+                            frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
+
+                # Set Jumia-specific fields
+                if order_data["platform"] == "Jumia":
+                    frappe.logger().info(f"Setting Jumia-specific fields")
+                    # Empty fields (not from Excel, not calculated) - manual entry only
+                    doc.subsidy = 0
+                    doc.shipping_collection = 0
+                    doc.cod_collection = 0
+                    doc.cod_fees = 0
+                    doc.cash_collection = 0
                     doc.adjustment = 0
 
                     # Commission from first item (from marketplace listing)
@@ -1604,6 +1724,21 @@ def bulk_import_platform_orders_from_excel(data):
                                 "type": "item_not_found",
                                 "platform_sku": item["platform_sku"],
                                 "message": f"Item not found for ASIN/SKU: {item['platform_sku']}",
+                            }
+                        )
+
+                # Track deduplicated items as warnings
+                for item in matched_items + unmatched_items:
+                    if item.get("deduplicated_from", 1) > 1:
+                        results["warnings"].append(
+                            {
+                                "order_number": order_data["order_number"],
+                                "platform_order": doc.name,
+                                "type": "item_deduplicated",
+                                "platform_sku": item["platform_sku"],
+                                "combined_rows": item["deduplicated_from"],
+                                "final_quantity": item["quantity"],
+                                "message": f"SKU {item['platform_sku']} combined from {item['deduplicated_from']} rows (Total Qty: {item['quantity']})",
                             }
                         )
 

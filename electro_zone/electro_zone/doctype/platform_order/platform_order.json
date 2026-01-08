@@ -70,7 +70,7 @@
             "fieldname": "fulfillment_channel",
             "fieldtype": "Select",
             "label": "Fulfillment Channel",
-            "options": "Amazon\nMerchant"
+            "options": "\nAmazon\nMerchant"
         },
         {
             "fieldname": "purchase_date",
