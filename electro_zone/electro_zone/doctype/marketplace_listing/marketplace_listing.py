@@ -44,6 +44,48 @@ class MarketplaceListing(Document):
 		if not listing_row.get("asin"):
 			frappe.throw("ASIN / SKU is required in Listing Details")
 
+		# Validate that this (platform, asin) combination doesn't already exist
+		# in another Marketplace Listing
+		self.validate_unique_platform_asin_combination(listing_row)
+
+	def validate_unique_platform_asin_combination(self, listing_row):
+		"""
+		Ensure that this (platform, asin) combination doesn't already exist
+		in another Marketplace Listing (approved).
+
+		This prevents multiple items from being assigned the same ASIN.
+		"""
+		platform = listing_row.get("platform")
+		asin = listing_row.get("asin")
+
+		if not platform or not asin:
+			return  # Already validated above
+
+		# Check if this (platform, asin) exists in another Marketplace Listing
+		existing = frappe.db.sql(
+			"""
+			SELECT mpl.name, mpl.item_code
+			FROM `tabMarketplace Listing` mpl
+			INNER JOIN `tabMarketplace Listing Detail` mpld
+				ON mpld.parent = mpl.name
+			WHERE mpld.platform = %(platform)s
+				AND mpld.asin = %(asin)s
+				AND mpl.name != %(current_name)s
+				AND mpl.docstatus = 1
+			LIMIT 1
+		""",
+			{"platform": platform, "asin": asin, "current_name": self.name or ""},
+			as_dict=True,
+		)
+
+		if existing:
+			frappe.throw(
+				f"ASIN '{asin}' for platform '{platform}' is already "
+				f"used in Marketplace Listing {existing[0].name} (Item: {existing[0].item_code}). "
+				f"Each ASIN can only be linked to one item.",
+				title="Duplicate ASIN",
+			)
+
 
 @frappe.whitelist()
 def get_latest_marketplace_listings(item_code):

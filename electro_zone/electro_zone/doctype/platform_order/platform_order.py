@@ -12,6 +12,9 @@ import re
 class PlatformOrder(Document):
     def validate(self):
         """Before Save validation"""
+        # Validate order_status changes on submitted documents
+        self.validate_order_status_change()
+
         # # Auto-fill Rep Name with current user
         # if not self.rep_name:
         #     self.rep_name = frappe.session.user
@@ -23,10 +26,6 @@ class PlatformOrder(Document):
         # Calculate totals
         self.calculate_totals()
 
-        # Calculate order value for Amazon, Homzmart, Jumia, and Noon
-        if self.platform in ["Amazon", "Homzmart", "Jumia", "Noon"]:
-            self.calculate_order_value()
-
         # Update match status
         self.update_match_status()
 
@@ -36,6 +35,37 @@ class PlatformOrder(Document):
         # Validate at least one item
         if not self.items:
             frappe.throw(_("Please add at least one item"))
+
+    def validate_order_status_change(self):
+        """
+        Validate that order_status changes on submitted documents only happen through whitelisted methods.
+        This prevents manual user edits while allowing programmatic updates via authorized methods.
+        """
+        # Only validate if document is submitted
+        if self.docstatus != 1:
+            return
+
+        # Check if order_status has changed
+        if not self.has_value_changed("order_status"):
+            return
+
+        # Check if this update is authorized (flag set by whitelisted methods)
+        if self.flags.get("allow_status_update"):
+            return
+
+        # Unauthorized status change - throw validation error
+        old_status = self.get_doc_before_save().order_status if self.get_doc_before_save() else "Unknown"
+        new_status = self.order_status
+
+        frappe.throw(
+            _(
+                "Order Status cannot be changed manually on submitted documents.<br>"
+                "Please use the appropriate buttons or methods to update status.<br>"
+                "<b>Current Status:</b> {0}<br>"
+                "<b>Attempted Change to:</b> {1}"
+            ).format(old_status, new_status),
+            title=_("Unauthorized Status Change")
+        )
 
     def calculate_totals(self):
         """Calculate total quantity and total amount from all items"""
@@ -50,29 +80,6 @@ class PlatformOrder(Document):
 
         self.total_quantity = total_qty
         self.total_amount = total_amount
-
-    def calculate_order_value(self):
-        """
-        Calculate order_value for Amazon, Homzmart, Jumia, and Noon platforms
-
-        Formula per homz.md/plat.md line 28:
-        = Unit Price + Shipping Collection - Commission Value + COD Collection
-          - COD Fees - Shipping Fees + Subsidy + Adjustment
-        """
-        if self.platform not in ["Amazon", "Homzmart", "Jumia", "Noon"]:
-            self.order_value = None
-            return
-
-        self.order_value = (
-            (self.unit_price or 0)
-            + (self.shipping_collection or 0)
-            - (self.commission_value or 0)
-            + (self.cod_collection or 0)
-            - (self.cod_fees or 0)
-            - (self.shipping_fees or 0)
-            + (self.subsidy or 0)
-            + (self.adjustment or 0)
-        )
 
     def update_match_status(self):
         """Update match_status based on matched and unmatched items"""
@@ -226,6 +233,7 @@ def mark_ready_to_ship(platform_order_name):
     stock_entry.submit()
 
     # Update Platform Order
+    doc.flags.allow_status_update = True  # Authorize this status change
     doc.order_status = "Ready to Ship"
     doc.ready_to_ship_date = now_datetime()
     doc.stock_entry_ready = stock_entry.name
@@ -339,6 +347,7 @@ def mark_shipped(platform_order_name):
         sales_invoice.submit()
 
         # Update Platform Order
+        doc.flags.allow_status_update = True  # Authorize this status change
         doc.sales_invoice = sales_invoice.name
         doc.order_status = "Shipped"
         doc.shipped_date = frappe.utils.now()
@@ -397,6 +406,7 @@ def bulk_update_status(platform_orders, new_status):
                 continue
 
             # Update status
+            doc.flags.allow_status_update = True  # Authorize this status change
             doc.order_status = new_status
             doc.flags.ignore_permissions = True
             doc.save()
@@ -873,10 +883,11 @@ def import_platform_orders_from_excel(data, platform_order_name):
             commission = float(get_excel_value(row, platform, "commission") or 0)
             total_price = float(row.get("Total Price", 0))  # Fallback to row value if exists
 
-            # Extract Homzmart-specific fields from Excel
-            shipping_collection = float(get_excel_value(row, platform, "shipping_collection") or 0)
-            cod_collection = float(get_excel_value(row, platform, "cod_collection") or 0)
-            cash_collection = float(get_excel_value(row, platform, "cash_collection") or 0)
+            # Extract per-item financial fields from Excel (for all platforms)
+            item_shipping_collection = float(get_excel_value(row, platform, "shipping_collection") or 0)
+            item_cod_collection = float(get_excel_value(row, platform, "cod_collection") or 0)
+            item_cash_collection = float(get_excel_value(row, platform, "cash_collection") or 0)
+            item_cod_fees = float(get_excel_value(row, platform, "cod_fees") or 0)
 
             # Convert Excel date to proper format
             purchase_date = convert_excel_date(purchase_date_raw)
@@ -913,7 +924,14 @@ def import_platform_orders_from_excel(data, platform_order_name):
                                 "quantity": quantity,
                                 "unit_price": unit_price,
                                 "shipping_fees": shipping_fees,
-                                "commission": commission,
+                                "commission_percent": commission,  # CHANGED: renamed from commission to commission_percent
+                                # Per-item financial fields
+                                "shipping_collection": item_shipping_collection,
+                                "cod_collection": item_cod_collection,
+                                "cash_collection": item_cash_collection,
+                                "cod_fees": item_cod_fees,
+                                "subsidy": 0,
+                                "adjustment": 0,
                             },
                         )
                         results["unmatched"].append({"row": row_idx, "platform_sku": platform_sku, "quantity": quantity})
@@ -934,8 +952,15 @@ def import_platform_orders_from_excel(data, platform_order_name):
                     "quantity": quantity,
                     "unit_price": unit_price,
                     "shipping_fees": shipping_fees,
-                    "commission": commission_percent or commission,  # Use marketplace commission if available
+                    "commission_percent": commission_percent or commission,  # CHANGED: renamed from commission to commission_percent
                     "stock_available": stock_qty,
+                    # Per-item financial fields
+                    "shipping_collection": item_shipping_collection,
+                    "cod_collection": item_cod_collection,
+                    "cash_collection": item_cash_collection,
+                    "cod_fees": item_cod_fees,
+                    "subsidy": 0,  # Default to 0, can be manually edited
+                    "adjustment": 0,  # Default to 0, can be manually edited
                 }
 
                 # Add to child table
@@ -966,7 +991,14 @@ def import_platform_orders_from_excel(data, platform_order_name):
                         "quantity": quantity,
                         "unit_price": unit_price,
                         "shipping_fees": shipping_fees,
-                        "commission": commission,
+                        "commission_percent": commission,  # CHANGED: renamed from commission to commission_percent
+                        # Per-item financial fields
+                        "shipping_collection": item_shipping_collection,
+                        "cod_collection": item_cod_collection,
+                        "cash_collection": item_cash_collection,
+                        "cod_fees": item_cod_fees,
+                        "subsidy": 0,
+                        "adjustment": 0,
                     },
                 )
                 results["unmatched"].append({"row": row_idx, "platform_sku": platform_sku, "quantity": quantity})
@@ -1013,59 +1045,7 @@ def import_platform_orders_from_excel(data, platform_order_name):
                 if region:
                     doc.region = str(region).strip()
 
-        # Set Homzmart-specific fields before saving
-        if platform == "Homzmart":
-            # Fields from Excel
-            if shipping_collection:
-                doc.shipping_collection = shipping_collection
-            if cod_collection:
-                doc.cod_collection = cod_collection
-            if cash_collection:
-                doc.cash_collection = cash_collection
-
-            # Internal fields (from marketplace listing or calculated)
-            if commission_percent:
-                doc.commission_percent = commission_percent
-            if commission_value:
-                doc.commission_value = commission_value
-
-            # Empty fields (not from Excel, not calculated)
-            doc.subsidy = 0
-            doc.adjustment = 0
-
-        # Set Jumia-specific fields before saving
-        if platform == "Jumia":
-            # Internal fields (from marketplace listing or calculated)
-            if commission_percent:
-                doc.commission_percent = commission_percent
-            if commission_value:
-                doc.commission_value = commission_value
-
-            # Empty fields (not from Excel, not calculated) - manual entry only
-            doc.subsidy = 0
-            doc.shipping_collection = 0
-            doc.cod_collection = 0
-            doc.cod_fees = 0
-            doc.cash_collection = 0
-            doc.adjustment = 0
-
-        # Set Noon-specific fields before saving
-        if platform == "Noon":
-            # Internal fields (from marketplace listing or calculated)
-            if commission_percent:
-                doc.commission_percent = commission_percent
-            if commission_value:
-                doc.commission_value = commission_value
-
-            # Empty fields (not from Excel, not calculated) - manual entry only
-            doc.subsidy = 0
-            doc.shipping_collection = 0
-            doc.cod_collection = 0
-            doc.cod_fees = 0
-            doc.cash_collection = 0
-            doc.adjustment = 0
-
-        # Save document
+        # Save document (no parent-level financial fields to set)
         doc.save()
 
         message = _("Imported {0} items").format(len(results["matched"]))
@@ -1391,10 +1371,7 @@ def bulk_import_platform_orders_from_excel(data):
                 "city": None,
                 "region": None,
                 "fulfillment_channel": None,  # For Amazon FBA/Merchant distinction
-                "shipping_collection": None,
-                "cod_collection": None,
-                "cash_collection": None,
-                "items": []
+                "items": []  # Each item will have its own financial fields
             }
         )
 
@@ -1472,20 +1449,7 @@ def bulk_import_platform_orders_from_excel(data):
                 if region:
                     orders_data[order_key]["region"] = str(region).strip()
 
-                # Extract Homzmart-specific financial fields
-                shipping_collection = float(get_excel_value(row, platform, "shipping_collection") or 0)
-                if shipping_collection:
-                    orders_data[order_key]["shipping_collection"] = shipping_collection
-
-                cod_collection = float(get_excel_value(row, platform, "cod_collection") or 0)
-                if cod_collection:
-                    orders_data[order_key]["cod_collection"] = cod_collection
-
-                cash_collection = float(get_excel_value(row, platform, "cash_collection") or 0)
-                if cash_collection:
-                    orders_data[order_key]["cash_collection"] = cash_collection
-
-                # Extract Amazon-specific fields
+                # Extract Amazon-specific fields (fulfillment channel only - no financial fields at parent level)
                 if platform == "Amazon":
                     # Extract fulfillment channel
                     fulfillment_channel_raw = get_excel_value(row, platform, "fulfillment_channel")
@@ -1495,18 +1459,22 @@ def bulk_import_platform_orders_from_excel(data):
                         if not orders_data[order_key]["fulfillment_channel"]:
                             orders_data[order_key]["fulfillment_channel"] = fulfillment_channel
 
-                    # Calculate shipping_collection from shipping-price and ship-promotion-discount
-                    shipping_collection = calculate_shipping_fees(row, platform)
-                    if shipping_collection:
-                        orders_data[order_key]["shipping_collection"] = shipping_collection
-
-            # Extract item data with platform-specific mappings
+            # Extract item data with platform-specific mappings (including per-item financial fields)
             platform_sku = get_excel_value(row, platform, "platform_sku") or str(row.get("Platform SKU", "")).strip()
             quantity = float(get_excel_value(row, platform, "quantity") or row.get("Quantity", 0))
             unit_price = float(get_excel_value(row, platform, "unit_price") or row.get("Unit Price", 0))
             shipping_fees = calculate_shipping_fees(row, platform)
             commission = float(get_excel_value(row, platform, "commission") or 0)
             total_price = float(row.get("Total Price", 0))  # Fallback to row value if exists
+
+            # Extract per-item financial fields from this Excel row
+            item_shipping_collection = float(get_excel_value(row, platform, "shipping_collection") or 0)
+            item_cod_collection = float(get_excel_value(row, platform, "cod_collection") or 0)
+            item_cash_collection = float(get_excel_value(row, platform, "cash_collection") or 0)
+            item_cod_fees = float(get_excel_value(row, platform, "cod_fees") or 0)
+            # For Amazon, calculate shipping_collection from shipping-price - discount
+            if platform == "Amazon":
+                item_shipping_collection = shipping_fees  # shipping_fees already calculated via calculate_shipping_fees()
 
             # Skip if no Platform SKU
             if not platform_sku:
@@ -1545,8 +1513,15 @@ def bulk_import_platform_orders_from_excel(data):
                         "quantity": quantity,
                         "unit_price": unit_price,
                         "shipping_fees": shipping_fees,
-                        "commission": commission_percent or commission,  # Use marketplace commission if available
+                        "commission_percent": commission_percent or commission,  # CHANGED: renamed from commission
                         "total_price": total_price,
+                        # Per-item financial fields
+                        "shipping_collection": item_shipping_collection,
+                        "cod_collection": item_cod_collection,
+                        "cash_collection": item_cash_collection,
+                        "cod_fees": item_cod_fees,
+                        "subsidy": 0,
+                        "adjustment": 0,
                     }
                 )
                 continue
@@ -1587,9 +1562,16 @@ def bulk_import_platform_orders_from_excel(data):
                     "quantity": quantity,
                     "unit_price": unit_price,
                     "shipping_fees": shipping_fees,
-                    "commission": commission_percent or commission,  # Use marketplace commission if available
+                    "commission_percent": commission_percent or commission,  # CHANGED: renamed from commission
                     "total_price": total_price,
                     "stock_available": stock_qty,
+                    # Per-item financial fields
+                    "shipping_collection": item_shipping_collection,
+                    "cod_collection": item_cod_collection,
+                    "cash_collection": item_cash_collection,
+                    "cod_fees": item_cod_fees,
+                    "subsidy": 0,
+                    "adjustment": 0,
                 }
             )
 
@@ -1668,115 +1650,12 @@ def bulk_import_platform_orders_from_excel(data):
                     frappe.logger().info(f"Setting region: {order_data['region']}")
                     doc.region = order_data["region"]
 
-                # Set parent-level fields from first item (matched or unmatched)
-                frappe.logger().info(f"Setting parent-level item fields")
-                first_item = matched_items[0] if matched_items else (unmatched_items[0] if unmatched_items else None)
-                if first_item:
-                    frappe.logger().info(f"Setting platform_sku: {first_item.get('platform_sku')}")
-                    doc.platform_sku = first_item.get("platform_sku")  # FIXED: use platform_sku
-                    frappe.logger().info(f"Setting quantity: {first_item.get('quantity', 0)}")
-                    doc.quantity = first_item.get("quantity", 0)
-                    frappe.logger().info(f"Setting unit_price: {first_item.get('unit_price', 0)}")
-                    doc.unit_price = first_item.get("unit_price", 0)
+                # Set Amazon fulfillment channel if applicable
+                if order_data["platform"] == "Amazon" and order_data.get("fulfillment_channel"):
+                    doc.fulfillment_channel = order_data["fulfillment_channel"]
+                    frappe.logger().info(f"Fulfillment channel: {doc.fulfillment_channel}")
 
-                # Set Homzmart-specific fields
-                if order_data["platform"] == "Homzmart":
-                    frappe.logger().info(f"Setting Homzmart-specific fields")
-                    # Fields from Excel
-                    if order_data.get("shipping_collection"):
-                        frappe.logger().info(f"Setting shipping_collection: {order_data['shipping_collection']}")
-                        doc.shipping_collection = order_data["shipping_collection"]
-                    if order_data.get("cod_collection"):
-                        frappe.logger().info(f"Setting cod_collection: {order_data['cod_collection']}")
-                        doc.cod_collection = order_data["cod_collection"]
-                    if order_data.get("cash_collection"):
-                        frappe.logger().info(f"Setting cash_collection: {order_data['cash_collection']}")
-                        doc.cash_collection = order_data["cash_collection"]
-
-                    # Empty fields (not from Excel, not calculated)
-                    frappe.logger().info(f"Setting subsidy and adjustment to 0")
-                    doc.subsidy = 0
-                    doc.adjustment = 0
-
-                    # Commission from first item (from marketplace listing)
-                    if first_item and first_item.get("commission"):
-                        frappe.logger().info(f"Setting commission_percent: {first_item['commission']}")
-                        doc.commission_percent = first_item["commission"]
-                        if doc.commission_percent and doc.unit_price:
-                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
-                            frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
-
-                # Set Jumia-specific fields
-                if order_data["platform"] == "Jumia":
-                    frappe.logger().info(f"Setting Jumia-specific fields")
-                    # Empty fields (not from Excel, not calculated) - manual entry only
-                    doc.subsidy = 0
-                    doc.shipping_collection = 0
-                    doc.cod_collection = 0
-                    doc.cod_fees = 0
-                    doc.cash_collection = 0
-                    doc.adjustment = 0
-
-                    # Commission from first item (from marketplace listing)
-                    if first_item and first_item.get("commission"):
-                        frappe.logger().info(f"Setting commission_percent: {first_item['commission']}")
-                        doc.commission_percent = first_item["commission"]
-                        if doc.commission_percent and doc.unit_price:
-                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
-                            frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
-
-                # Set Noon-specific fields
-                if order_data["platform"] == "Noon":
-                    frappe.logger().info(f"Setting Noon-specific fields")
-                    # Empty fields (not from Excel, not calculated) - manual entry only
-                    doc.subsidy = 0
-                    doc.shipping_collection = 0
-                    doc.cod_collection = 0
-                    doc.cod_fees = 0
-                    doc.cash_collection = 0
-                    doc.adjustment = 0
-
-                    # Commission from first item (from marketplace listing)
-                    if first_item and first_item.get("commission"):
-                        frappe.logger().info(f"Setting commission_percent: {first_item['commission']}")
-                        doc.commission_percent = first_item["commission"]
-                        if doc.commission_percent and doc.unit_price:
-                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price
-                            frappe.logger().info(f"Calculated commission_value: {doc.commission_value}")
-
-                # Set Amazon-specific fields
-                if order_data["platform"] == "Amazon":
-                    frappe.logger().info(f"Setting Amazon-specific fields")
-
-                    # Set fulfillment channel
-                    if order_data.get("fulfillment_channel"):
-                        doc.fulfillment_channel = order_data["fulfillment_channel"]
-                        frappe.logger().info(f"Fulfillment channel: {doc.fulfillment_channel}")
-
-                    # Fields calculated or from Excel
-                    if order_data.get("shipping_collection"):
-                        doc.shipping_collection = order_data["shipping_collection"]
-                        frappe.logger().info(f"Shipping collection: {doc.shipping_collection}")
-
-                    # Internal fields (from marketplace listing or calculated)
-                    if first_item and first_item.get("commission"):
-                        doc.commission_percent = first_item["commission"]
-                        frappe.logger().info(f"Commission percent: {doc.commission_percent}")
-
-                        # Amazon commission includes shipping_collection
-                        if doc.commission_percent and doc.unit_price:
-                            shipping_collection_value = order_data.get("shipping_collection") or 0
-                            doc.commission_value = (doc.commission_percent / 100) * doc.unit_price + shipping_collection_value
-                            frappe.logger().info(f"Commission value (with shipping): {doc.commission_value}")
-
-                    # Initialize empty fields
-                    doc.subsidy = 0
-                    doc.cod_collection = 0
-                    doc.cod_fees = 0
-                    doc.cash_collection = 0
-                    doc.adjustment = 0
-
-                # Add matched items
+                # Add matched items (with per-item financial fields)
                 for item in matched_items:
                     doc.append(
                         "items",
@@ -1789,8 +1668,15 @@ def bulk_import_platform_orders_from_excel(data):
                             "quantity": item["quantity"],
                             "unit_price": item["unit_price"],
                             "shipping_fees": item.get("shipping_fees", 0),
-                            "commission": item.get("commission", 0),
+                            "commission_percent": item.get("commission_percent", 0),  # CHANGED: renamed from commission
                             "stock_available": item["stock_available"],
+                            # Per-item financial fields
+                            "shipping_collection": item.get("shipping_collection", 0),
+                            "cod_collection": item.get("cod_collection", 0),
+                            "cash_collection": item.get("cash_collection", 0),
+                            "cod_fees": item.get("cod_fees", 0),
+                            "subsidy": item.get("subsidy", 0),
+                            "adjustment": item.get("adjustment", 0),
                         },
                     )
 
@@ -1807,7 +1693,7 @@ def bulk_import_platform_orders_from_excel(data):
                             }
                         )
 
-                # Add unmatched items
+                # Add unmatched items (with per-item financial fields)
                 for item in unmatched_items:
                     doc.append(
                         "items",
@@ -1816,6 +1702,15 @@ def bulk_import_platform_orders_from_excel(data):
                             "platform_sku": item["platform_sku"],  # FIXED: use platform_sku
                             "quantity": item["quantity"],
                             "unit_price": item["unit_price"],
+                            "shipping_fees": item.get("shipping_fees", 0),
+                            "commission_percent": item.get("commission_percent", 0),
+                            # Per-item financial fields
+                            "shipping_collection": item.get("shipping_collection", 0),
+                            "cod_collection": item.get("cod_collection", 0),
+                            "cash_collection": item.get("cash_collection", 0),
+                            "cod_fees": item.get("cod_fees", 0),
+                            "subsidy": item.get("subsidy", 0),
+                            "adjustment": item.get("adjustment", 0),
                         },
                     )
 

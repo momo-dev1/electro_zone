@@ -13,7 +13,7 @@ frappe.listview_settings["Platform Order"] = {
 			}
 
 			let d = new frappe.ui.Dialog({
-				title: __("Bulk Update Delivery Status"),
+				title: __("Bulk Update Order Status"),
 				fields: [
 					{
 						fieldname: "info",
@@ -85,7 +85,7 @@ frappe.listview_settings["Platform Order"] = {
 		});
 	},
 
-	// Custom indicator colors based on delivery status
+	// Custom indicator colors based on order status
 	get_indicator: function (doc) {
 		const status_colors = {
 			Pending: "orange",
@@ -115,11 +115,11 @@ frappe.listview_settings["Platform Order"] = {
 			];
 		}
 
-		// Priority 3: Show delivery_status
+		// Priority 3: Show order_status
 		return [
-			__(doc.delivery_status),
-			status_colors[doc.delivery_status] || "gray",
-			"delivery_status,=," + doc.delivery_status,
+			__(doc.order_status),
+			status_colors[doc.order_status] || "gray",
+			"order_status,=," + doc.order_status,
 		];
 	},
 

@@ -23,19 +23,6 @@
         "address",
         "section_break_item",
         "items",
-        "section_break_financial",
-        "shipping_collection",
-        "commission_percent",
-        "commission_value",
-        "cod_collection",
-        "column_break_financial",
-        "cod_fees",
-        "shipping_fees",
-        "subsidy",
-        "cash_collection",
-        "column_break_financial_2",
-        "adjustment",
-        "order_value",
         "section_break_tracking",
         "ready_to_ship_date",
         "shipped_date",
@@ -88,6 +75,7 @@
             "unique": 1
         },
         {
+            "allow_on_submit": 1,
             "default": "Pending",
             "fieldname": "order_status",
             "fieldtype": "Select",
@@ -152,70 +140,6 @@
             "fieldtype": "Table",
             "label": "Items",
             "options": "Platform Order Item"
-        },
-        {
-            "fieldname": "section_break_financial",
-            "fieldtype": "Section Break",
-            "label": "Financial Details"
-        },
-        {
-            "fieldname": "shipping_collection",
-            "fieldtype": "Currency",
-            "label": "Shipping Collection"
-        },
-        {
-            "fieldname": "commission_percent",
-            "fieldtype": "Percent",
-            "label": "Commission Percent"
-        },
-        {
-            "fieldname": "commission_value",
-            "fieldtype": "Currency",
-            "label": "Commission Value"
-        },
-        {
-            "fieldname": "cod_collection",
-            "fieldtype": "Currency",
-            "label": "COD Collection"
-        },
-        {
-            "fieldname": "column_break_financial",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "cod_fees",
-            "fieldtype": "Currency",
-            "label": "COD Fees"
-        },
-        {
-            "fieldname": "shipping_fees",
-            "fieldtype": "Currency",
-            "label": "Shipping Fees"
-        },
-        {
-            "fieldname": "subsidy",
-            "fieldtype": "Currency",
-            "label": "Subsidy"
-        },
-        {
-            "fieldname": "cash_collection",
-            "fieldtype": "Currency",
-            "label": "Cash Collection"
-        },
-        {
-            "fieldname": "column_break_financial_2",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "adjustment",
-            "fieldtype": "Currency",
-            "label": "Adjustment"
-        },
-        {
-            "fieldname": "order_value",
-            "fieldtype": "Currency",
-            "label": "Order Value",
-            "read_only": 1
         },
         {
             "collapsible": 1,

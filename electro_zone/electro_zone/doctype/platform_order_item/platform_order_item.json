@@ -15,7 +15,17 @@
   "quantity",
   "unit_price",
   "shipping_fees",
-  "commission",
+  "shipping_collection",
+  "commission_percent",
+  "commission_value",
+  "column_break_financial",
+  "cod_collection",
+  "cod_fees",
+  "cash_collection",
+  "subsidy",
+  "adjustment",
+  "order_value",
+  "section_break_3",
   "stock_available",
   "is_matched"
  ],
@@ -79,12 +89,62 @@
    "label": "Shipping Fees"
   },
   {
+   "fieldname": "shipping_collection",
+   "fieldtype": "Currency",
+   "label": "Shipping Collection"
+  },
+  {
    "default": "0",
    "description": "Platform commission percentage",
-   "fieldname": "commission",
+   "fieldname": "commission_percent",
    "fieldtype": "Percent",
    "in_list_view": 1,
    "label": "Commission %"
+  },
+  {
+   "fieldname": "commission_value",
+   "fieldtype": "Currency",
+   "label": "Commission Value",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_financial",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cod_collection",
+   "fieldtype": "Currency",
+   "label": "COD Collection"
+  },
+  {
+   "fieldname": "cod_fees",
+   "fieldtype": "Currency",
+   "label": "COD Fees"
+  },
+  {
+   "fieldname": "cash_collection",
+   "fieldtype": "Currency",
+   "label": "Cash Collection"
+  },
+  {
+   "fieldname": "subsidy",
+   "fieldtype": "Currency",
+   "label": "Subsidy"
+  },
+  {
+   "fieldname": "adjustment",
+   "fieldtype": "Currency",
+   "label": "Adjustment"
+  },
+  {
+   "fieldname": "order_value",
+   "fieldtype": "Currency",
+   "label": "Order Value",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break"
   },
   {
    "fieldname": "stock_available",

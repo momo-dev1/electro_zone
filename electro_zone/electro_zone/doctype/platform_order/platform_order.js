@@ -11,7 +11,7 @@ frappe.ui.form.on("Platform Order", {
         }
 
         // Mark as Ready to Ship button - show when Pending and not submitted
-        if (frm.doc.delivery_status === "Pending" && frm.doc.docstatus === 0 && frm.doc.items && frm.doc.items.length > 0) {
+        if (frm.doc.order_status === "Pending" && frm.doc.docstatus === 0 && frm.doc.items && frm.doc.items.length > 0) {
             frm.add_custom_button(__("Mark as Ready to Ship"), function () {
                 frappe.confirm(
                     __("This will move items from Main Warehouse to Hold Warehouse. Continue?"),
@@ -35,7 +35,7 @@ frappe.ui.form.on("Platform Order", {
         }
 
         // Mark as Shipped button - show when Ready to Ship and submitted
-        if (frm.doc.delivery_status === "Ready to Ship" && frm.doc.docstatus === 1) {
+        if (frm.doc.order_status === "Ready to Ship" && frm.doc.docstatus === 1) {
             frm.add_custom_button(__("Mark as Shipped"), function () {
                 frappe.confirm(
                     __("This will create Sales Invoice and deduct stock from Hold Warehouse. Continue?"),
@@ -59,10 +59,10 @@ frappe.ui.form.on("Platform Order", {
         }
 
         // Manual status change for final statuses - show when Shipped and submitted
-        if (frm.doc.delivery_status === "Shipped" && frm.doc.docstatus === 1) {
+        if (frm.doc.order_status === "Shipped" && frm.doc.docstatus === 1) {
             frm.add_custom_button(__("Update Status"), function () {
                 let d = new frappe.ui.Dialog({
-                    title: __("Update Delivery Status"),
+                    title: __("Update Order Status"),
                     fields: [
                         {
                             fieldname: "new_status",
@@ -74,7 +74,7 @@ frappe.ui.form.on("Platform Order", {
                     ],
                     primary_action_label: __("Update"),
                     primary_action: function (values) {
-                        frm.set_value("delivery_status", values.new_status);
+                        frm.set_value("order_status", values.new_status);
                         frm.save();
                         d.hide();
                     },
@@ -167,11 +167,11 @@ function set_status_indicator(frm) {
         "Returned": "yellow",
     };
 
-    // Primary indicator: Delivery Status
-    if (frm.doc.delivery_status) {
+    // Primary indicator: Order Status
+    if (frm.doc.order_status) {
         frm.page.set_indicator(
-            __(frm.doc.delivery_status),
-            status_colors[frm.doc.delivery_status] || "gray"
+            __(frm.doc.order_status),
+            status_colors[frm.doc.order_status] || "gray"
         );
     }
 
