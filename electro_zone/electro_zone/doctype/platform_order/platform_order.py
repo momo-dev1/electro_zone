@@ -181,6 +181,10 @@ def mark_ready_to_ship(platform_order_name):
     if doc.order_status != "Pending":
         frappe.throw(_("Can only mark Pending orders as Ready to Ship"))
 
+    # Validate customer_name is filled
+    if not doc.customer_name:
+        frappe.throw(_("Customer Name is required before marking as Ready to Ship"))
+
     # Validate stock availability in Main Warehouse
     stock_errors = []
     main_warehouse = get_main_warehouse()
@@ -413,6 +417,7 @@ def bulk_update_status(platform_orders, new_status):
             doc.flags.allow_status_update = True  # Authorize this status change
             doc.order_status = new_status
             doc.flags.ignore_permissions = True
+            doc.flags.ignore_mandatory = True
             doc.save()
             updated.append(po_name)
 
@@ -653,6 +658,7 @@ def match_unmatched_item(platform_order, unmatched_item_row_name, item_code):
     unmatched_item.stock_available = stock_qty
 
     # Save (this will trigger validation and update statuses)
+    doc.flags.ignore_mandatory = True
     doc.save()
 
     return {"success": True, "message": _("Item matched successfully")}
@@ -1109,6 +1115,8 @@ def import_platform_orders_from_excel(data, platform_order_name):
                     doc.region = str(region).strip()
 
         # Save document (no parent-level financial fields to set)
+        # Allow saving without customer_name (will be validated before Ready to Ship)
+        doc.flags.ignore_mandatory = True
         doc.save()
 
         message = _("Imported {0} items").format(len(results["matched"]))
@@ -1777,6 +1785,8 @@ def bulk_import_platform_orders_from_excel(data):
                     )
 
                 # Insert document (validation will set match_status and stock_status)
+                # Allow saving without customer_name (will be validated before Ready to Ship)
+                doc.flags.ignore_mandatory = True
                 frappe.logger().info(f"Inserting document for order {order_data['order_number']}")
                 try:
                     doc.insert()
@@ -1975,6 +1985,7 @@ def update_prices_from_noon_excel(data):
 
                     # Save if any items were updated
                     if updated_count > 0:
+                        doc.flags.ignore_mandatory = True
                         doc.save()
 
                 except Exception as e:
@@ -2083,6 +2094,7 @@ def update_customer_names_from_noon_excel(data):
 
                     # Update customer_name
                     doc.customer_name = receiver_legal_name
+                    doc.flags.ignore_mandatory = True
                     doc.save()
 
                     results["updated_orders"].append({
