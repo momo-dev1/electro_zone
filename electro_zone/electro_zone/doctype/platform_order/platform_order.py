@@ -546,27 +546,6 @@ PLATFORM_EXCEL_MAPPINGS = {
         "status_value": None,
         "default_quantity": None,
     },
-    # "Noon": {
-    #     "order_number": "purchase_item_nr",
-    #     "platform_date": "fulfillment_timestamp",
-    #     "platform_sku": "sku",
-    #     "quantity": "quantity",
-    #     "status_filter": "order_status",
-    #     "status_value": None,
-    #     "default_qty": None,
-    # },
-    # "Jumia": {
-    #     "order_number": "Order Number",
-    #     "platform_date": "Updated At",
-    #     "platform_sku": "Sku",
-    #     "unit_price": "Unit Price",
-    #     "shipping_fees": "Shipping Fee",
-    #     "customer_first_name": "Customer First Name",
-    #     "customer_last_name": "Customer Last Name",
-    #     "status_filter": "Status",
-    #     "status_value": "ready to ship",
-    #     "default_qty": 1,
-    # },
     "Homzmart": {
         "order_number": ["orderId", "itemid"],  # Concatenated
         "purchase_date": "addedDate",
@@ -620,16 +599,6 @@ PLATFORM_DETECTION_PATTERNS = {
         "optional_columns": ["item-price", "shipping-price", "ship-promotion-discount", "purchase-date", "quantity", "fulfillment-channel"],
         "min_match": 2,
     },
-    # "Noon": {
-    #     "required_columns": ["order_nr", "sku"],
-    #     "optional_columns": ["fulfillment_timestamp", "order_status"],
-    #     "min_match": 2,
-    # },
-    # "Jumia": {
-    #     "required_columns": ["Sku", "Order Number"],  # Note: capital S in Sku
-    #     "optional_columns": ["Updated At", "Shipping Fee", "Unit Price", "Customer First Name", "Customer Last Name", "Status"],
-    #     "min_match": 2,
-    # },
     "Homzmart": {
         "required_columns": ["itemid", "itemSku"],
         "optional_columns": ["orderId", "itemQty", "itemPrice", "itemShippingFees", "itemGrandTotal", "customerName", "customerMobile", "customer_address", "customer_region", "cod_fees", "addedDate", "status"],
@@ -765,41 +734,6 @@ def detect_platform_from_columns(column_headers):
         return max(platform_scores, key=platform_scores.get)
 
     return None
-
-
-# def detect_noon_import_type(column_headers):
-#     """
-#     Detect if Noon Excel is for order import, price update, or customer name update
-#
-#     Args:
-#         column_headers: List of column names from Excel
-#
-#     Returns:
-#         str: "order_import", "price_update", "customer_name_update", or None
-#     """
-#     if not column_headers:
-#         return None
-#
-#     # Normalize column headers (strip whitespace, lowercase, remove extra spaces)
-#     normalized = [" ".join(str(col).strip().lower().split()) for col in column_headers]
-#
-#     # Check customer name update pattern (Source Doc Line Nr, Receiver Legal Entity)
-#     has_source_doc = any("source doc line nr" in col or col == "source doc line nr" for col in normalized)
-#     has_receiver = any("receiver legal entity" in col or col == "receiver legal entity" for col in normalized)
-#
-#     if has_source_doc and has_receiver:
-#         return "customer_name_update"
-#
-#     # Check price update pattern (item_nr, offer_price, status)
-#     if all(col in normalized for col in ["item_nr", "offer_price", "status"]):
-#         return "price_update"
-#
-#     # Check order import pattern (purchase_item_nr, sku, quantity)
-#     if "purchase_item_nr" in normalized or "sku" in normalized:
-#         return "order_import"
-#
-#     return None
-
 
 def filter_columns_by_platform(row, platform):
     """
@@ -946,7 +880,7 @@ def import_platform_orders_from_excel(data, platform_order_name):
                 item_data = {
                     "is_matched": 1,
                     "item_code": item.name,
-                    "item_model": item.custom_item_model,  # FIXED: child table field is "item_model"
+                    "item_model": item.custom_item_model, 
                     "description": item.description,
                     "platform_sku": platform_sku,
                     "quantity": quantity,
@@ -1006,7 +940,7 @@ def import_platform_orders_from_excel(data, platform_order_name):
             # Update header fields from first data row
             if not doc.platform and platform:
                 doc.platform = platform
-            if not doc.purchase_date and purchase_date:  # FIXED: field is purchase_date
+            if not doc.purchase_date and purchase_date:  
                 doc.purchase_date = purchase_date
             if not doc.order_number and order_number:
                 doc.order_number = order_number
@@ -1025,12 +959,12 @@ def import_platform_orders_from_excel(data, platform_order_name):
                         doc.customer_name = f"{customer_first_name} {customer_last_name}".strip()
 
             # Update additional customer fields
-            if not doc.mobile_number:  # FIXED: field is mobile_number
+            if not doc.mobile_number: 
                 mobile_number = get_excel_value(row, platform, "mobile_number")
                 if mobile_number:
                     doc.mobile_number = str(mobile_number).strip()
 
-            if not doc.address:  # FIXED: field is address
+            if not doc.address: 
                 address = get_excel_value(row, platform, "address")
                 if address:
                     doc.address = str(address).strip()
@@ -1363,15 +1297,15 @@ def bulk_import_platform_orders_from_excel(data):
         orders_data = defaultdict(
             lambda: {
                 "platform": None,
-                "purchase_date": None,  # FIXED: field is purchase_date
+                "purchase_date": None,  
                 "order_number": None,
                 "customer_name": None,
-                "mobile_number": None,  # FIXED: field is mobile_number
-                "address": None,  # FIXED: field is address
+                "mobile_number": None,  
+                "address": None, 
                 "city": None,
                 "region": None,
-                "fulfillment_channel": None,  # For Amazon FBA/Merchant distinction
-                "items": []  # Each item will have its own financial fields
+                "fulfillment_channel": None,  
+                "items": []  
             }
         )
 
@@ -1418,7 +1352,7 @@ def bulk_import_platform_orders_from_excel(data):
             # Set header fields (from first occurrence)
             if not orders_data[order_key]["order_number"]:
                 orders_data[order_key]["platform"] = platform
-                orders_data[order_key]["purchase_date"] = purchase_date  # FIXED: field is purchase_date
+                orders_data[order_key]["purchase_date"] = purchase_date  
                 orders_data[order_key]["order_number"] = order_number
 
                 # Extract customer name (Homzmart has direct customerName, Jumia has first/last name)
@@ -1433,11 +1367,11 @@ def bulk_import_platform_orders_from_excel(data):
                         orders_data[order_key]["customer_name"] = f"{customer_first_name} {customer_last_name}".strip()
 
                 # Extract additional customer fields
-                mobile_number = get_excel_value(row, platform, "mobile_number")  # FIXED: use mobile_number
+                mobile_number = get_excel_value(row, platform, "mobile_number") 
                 if mobile_number:
                     orders_data[order_key]["mobile_number"] = str(mobile_number).strip()
 
-                address = get_excel_value(row, platform, "address")  # FIXED: use address
+                address = get_excel_value(row, platform, "address") 
                 if address:
                     orders_data[order_key]["address"] = str(address).strip()
 
@@ -1583,7 +1517,7 @@ def bulk_import_platform_orders_from_excel(data):
                     results["failed"].append({"order_number": order_data["order_number"], "error": "Missing Platform"})
                     continue
 
-                if not order_data["purchase_date"]:  # FIXED: field is purchase_date
+                if not order_data["purchase_date"]:  
                     results["failed"].append(
                         {"order_number": order_data["order_number"], "error": "Missing Purchase Date"}
                     )
@@ -1603,13 +1537,13 @@ def bulk_import_platform_orders_from_excel(data):
                 existing_order = frappe.db.get_value(
                     "Platform Order",
                     {"order_number": order_data["order_number"]},
-                    ["name", "platform", "order_status"],  # FIXED: field is order_status
+                    ["name", "platform", "order_status"],  
                     as_dict=True
                 )
                 if existing_order:
                     results["failed"].append({
                         "order_number": order_data["order_number"],
-                        "error": f"Order already exists: {existing_order.name} (Platform: {existing_order.platform}, Status: {existing_order.order_status})"  # FIXED
+                        "error": f"Order already exists: {existing_order.name} (Platform: {existing_order.platform}, Status: {existing_order.order_status})" 
                     })
                     continue
 
@@ -1626,21 +1560,20 @@ def bulk_import_platform_orders_from_excel(data):
                 frappe.logger().info(f"Setting platform: {order_data['platform']}")
                 doc.platform = order_data["platform"]
                 frappe.logger().info(f"Setting purchase_date: {order_data['purchase_date']}")
-                doc.purchase_date = order_data["purchase_date"]  # FIXED: field is purchase_date
+                doc.purchase_date = order_data["purchase_date"]  
                 frappe.logger().info(f"Setting order_number: {order_data['order_number']}")
                 doc.order_number = order_data["order_number"]
                 frappe.logger().info(f"Setting order_status: Pending")
-                doc.order_status = "Pending"  # FIXED: field is order_status
-
+                doc.order_status = "Pending"  
                 # Set customer fields if available
                 frappe.logger().info(f"Setting customer fields")
                 if order_data.get("customer_name"):
                     frappe.logger().info(f"Setting customer_name: {order_data['customer_name']}")
                     doc.customer_name = order_data["customer_name"]
-                if order_data.get("mobile_number"):  # FIXED: field is mobile_number
+                if order_data.get("mobile_number"):  
                     frappe.logger().info(f"Setting mobile_number: {order_data['mobile_number']}")
                     doc.mobile_number = order_data["mobile_number"]
-                if order_data.get("address"):  # FIXED: field is address
+                if order_data.get("address"):  
                     frappe.logger().info(f"Setting address: {order_data['address']}")
                     doc.address = order_data["address"]
                 if order_data.get("city"):
@@ -1662,13 +1595,13 @@ def bulk_import_platform_orders_from_excel(data):
                         {
                             "is_matched": 1,
                             "item_code": item["item_code"],
-                            "item_model": item.get("custom_item_model"),  # FIXED: child table field is "item_model"
+                            "item_model": item.get("custom_item_model"), 
                             "description": item["description"],
-                            "platform_sku": item["platform_sku"],  # FIXED: use platform_sku
+                            "platform_sku": item["platform_sku"], 
                             "quantity": item["quantity"],
                             "unit_price": item["unit_price"],
                             "shipping_fees": item.get("shipping_fees", 0),
-                            "commission_percent": item.get("commission_percent", 0),  # CHANGED: renamed from commission
+                            "commission_percent": item.get("commission_percent", 0), 
                             "stock_available": item["stock_available"],
                             # Per-item financial fields
                             "shipping_collection": item.get("shipping_collection", 0),
@@ -1699,7 +1632,7 @@ def bulk_import_platform_orders_from_excel(data):
                         "items",
                         {
                             "is_matched": 0,
-                            "platform_sku": item["platform_sku"],  # FIXED: use platform_sku
+                            "platform_sku": item["platform_sku"],  
                             "quantity": item["quantity"],
                             "unit_price": item["unit_price"],
                             "shipping_fees": item.get("shipping_fees", 0),
