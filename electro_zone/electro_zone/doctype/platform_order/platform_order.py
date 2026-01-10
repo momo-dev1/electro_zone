@@ -271,10 +271,14 @@ def mark_shipped(platform_order_name):
     if doc.docstatus != 1:
         frappe.throw(_("Platform Order must be submitted before marking as shipped"))
 
-    # Get customer from platform name (e.g., "Homzmart")
-    customer = doc.platform
-    if not customer or not frappe.db.exists("Customer", customer):
-        frappe.throw(_("Customer '{0}' does not exist. Please create a customer with name '{0}' first.").format(doc.platform))
+    # Validate customer_name exists
+    if not doc.customer_name:
+        frappe.throw(_("Customer Name is required to create an invoice"))
+
+    # Get or create customer from customer_name
+    customer = get_or_create_customer(doc.customer_name, doc.platform)
+    if not customer:
+        frappe.throw(_("Failed to create customer '{0}'").format(doc.customer_name))
 
     # Get company and warehouses
     company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company")
@@ -453,6 +457,131 @@ def get_hold_warehouse():
         return hold_wh.name
     except Exception:
         frappe.throw(_("Hold warehouse not found. Please create a 'Hold' warehouse first."))
+
+
+def get_or_create_customer(customer_name, platform):
+    """
+    Get or create customer from customer_name and assign to platform group
+
+    Args:
+        customer_name: Name of the customer
+        platform: Platform name (Amazon, Noon, Jumia, Homzmart, etc.)
+
+    Returns:
+        str: Customer name/ID
+    """
+    if not customer_name:
+        return None
+
+    # Check if customer already exists (by customer_name field)
+    existing_customer = frappe.db.get_value("Customer", {"customer_name": customer_name}, "name")
+    if existing_customer:
+        # Update customer group if needed
+        update_customer_group(existing_customer, platform)
+        return existing_customer
+
+    # Create new customer
+    try:
+        # Get company
+        company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        if not company:
+            company = frappe.db.get_value("Company", {}, "name")
+
+        # Get or create customer group based on platform
+        customer_group = get_or_create_platform_customer_group(platform)
+
+        # Create customer
+        customer_doc = frappe.get_doc({
+            "doctype": "Customer",
+            "customer_name": customer_name,
+            "customer_type": "Individual",
+            "customer_group": customer_group,
+            "territory": frappe.db.get_value("Territory", {}, "name") or "All Territories",
+        })
+        customer_doc.insert(ignore_permissions=True)
+
+        frappe.msgprint(_("Customer '{0}' created and assigned to group '{1}'").format(customer_name, customer_group))
+
+        return customer_doc.name
+
+    except Exception as e:
+        frappe.log_error(
+            f"Customer creation failed for {customer_name}: {str(e)}",
+            "Platform Order Customer Creation Error"
+        )
+        frappe.throw(_("Failed to create customer '{0}': {1}").format(customer_name, str(e)))
+
+
+def get_or_create_platform_customer_group(platform):
+    """
+    Get or create customer group based on platform
+
+    Args:
+        platform: Platform name (Amazon, Noon, Jumia, Homzmart, etc.)
+
+    Returns:
+        str: Customer group name
+    """
+    if not platform:
+        return frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
+
+    # Customer group naming: e.g., "Amazon Customers", "Noon Customers"
+    group_name = f"{platform} Customers"
+
+    # Check if group exists
+    if frappe.db.exists("Customer Group", group_name):
+        return group_name
+
+    # Create customer group
+    try:
+        # Get parent group (default to "All Customer Groups")
+        parent_group = frappe.db.get_value("Customer Group", {"is_group": 1}, "name") or "All Customer Groups"
+
+        customer_group = frappe.get_doc({
+            "doctype": "Customer Group",
+            "customer_group_name": group_name,
+            "parent_customer_group": parent_group,
+            "is_group": 0,
+        })
+        customer_group.insert(ignore_permissions=True)
+
+        return customer_group.name
+
+    except Exception as e:
+        frappe.log_error(
+            f"Customer group creation failed for {platform}: {str(e)}",
+            "Platform Order Customer Group Creation Error"
+        )
+        # Fallback to default group
+        return frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
+
+
+def update_customer_group(customer_name, platform):
+    """
+    Update customer group if it doesn't match the platform
+
+    Args:
+        customer_name: Customer ID/name
+        platform: Platform name
+    """
+    if not platform:
+        return
+
+    try:
+        customer_doc = frappe.get_doc("Customer", customer_name)
+        expected_group = get_or_create_platform_customer_group(platform)
+
+        # Update if different
+        if customer_doc.customer_group != expected_group:
+            customer_doc.customer_group = expected_group
+            customer_doc.save(ignore_permissions=True)
+
+    except Exception as e:
+        # Don't throw error, just log it
+        frappe.log_error(
+            f"Customer group update failed for {customer_name}: {str(e)}",
+            "Platform Order Customer Group Update Error"
+        )
 
 
 # def get_or_create_platform_customer(platform):
@@ -1064,9 +1193,9 @@ def get_item_from_marketplace_listing(platform, platform_sku, fulfillment_channe
     marketplace_platform = platform
     if platform == "Amazon" and fulfillment_channel:
         if fulfillment_channel == "Amazon":
-            marketplace_platform = "Amazon"  # FBA orders match to Platform="Amazon"
+            marketplace_platform = "Amazon"  
         elif fulfillment_channel == "Merchant":
-            marketplace_platform = "Merchant"  # Merchant orders match to Platform="Merchant"
+            marketplace_platform = "Merchant" 
         # If fulfillment_channel is None or empty, use "Amazon" as default
 
     sql = """
@@ -1104,9 +1233,9 @@ def get_commission_and_shipping_from_marketplace_listing(platform, platform_sku,
     marketplace_platform = platform
     if platform == "Amazon" and fulfillment_channel:
         if fulfillment_channel == "Amazon":
-            marketplace_platform = "Amazon"  # FBA orders match to Platform="Amazon"
+            marketplace_platform = "Amazon" 
         elif fulfillment_channel == "Merchant":
-            marketplace_platform = "Merchant"  # Merchant orders match to Platform="Merchant"
+            marketplace_platform = "Merchant" 
 
     sql = """
         SELECT mpld.commission as commission_percent,
